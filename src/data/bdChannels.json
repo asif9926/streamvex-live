@@ -31,7 +31,7 @@
     "category": "বাংলাদেশী টিভি",
     "subcategory": "General",
     "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Bangladesh_Television_logo.svg/120px-Bangladesh_Television_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1709/output/1709.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": true,
     "isPremium": false,
