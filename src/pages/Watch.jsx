@@ -3,7 +3,7 @@
 // ✅ [Fix] PageMeta import সঠিক করা হয়েছে
 
 import { useParams, Link, useNavigate }    from 'react-router-dom'
-import { useState, useEffect, useRef }     from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Helmet }                           from 'react-helmet-async'
 import { motion }                           from 'framer-motion'
 import { useChannelStore }                  from '../store/channelStore.js'
@@ -19,7 +19,9 @@ export default function Watch() {
   const { id }      = useParams()
   const navigate    = useNavigate()
   const getById     = useChannelStore(s => s.getChannelById)
-  const allChannels = useChannelStore(s => [...s.channels, ...s.bdChannels])
+  const channels    = useChannelStore(s => s.channels)
+  const bdChannels  = useChannelStore(s => s.bdChannels)
+  const allChannels = useMemo(() => [...channels, ...bdChannels], [channels, bdChannels])
   const channel     = getById(id)
 
   const isCricket  = channel?.sport === 'cricket'  || channel?.subcategory?.toLowerCase() === 'cricket'
