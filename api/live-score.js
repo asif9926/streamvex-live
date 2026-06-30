@@ -1,6 +1,9 @@
 // api/live-score.js — Live cricket + football scores
 // Blueprint: RapidAPI → Vercel KV (90s cache)
 // ✅ [Update #1] Edge Cache header: s-maxage=90, stale-while-revalidate=120
+// ✅ [Fix] Correct RapidAPI endpoint paths — verified against working production reference
+//    Cricket:  /matches  →  /liveMatches   (cricket-live-line1 real endpoint)
+//    Football: /api/football/matches/live  →  /api/matches/live  (allsportsapi2 real endpoint)
 //
 // Env vars required:
 //   RAPIDAPI_KEY — rapidapi.com dashboard থেকে নাও
@@ -8,9 +11,10 @@
 import { kv } from '@vercel/kv'
 
 // ── API Config ────────────────────────────────────────
-const CRICKET_API  = 'https://cricket-live-line1.p.rapidapi.com/matches'
-const FOOTBALL_API = 'https://allsportsapi2.p.rapidapi.com/api/football/matches/live'
-const CRICKET_HOST = 'cricket-live-line1.p.rapidapi.com'
+// ✅ [Fix] সঠিক endpoint path — RapidAPI marketplace এ actual documented route
+const CRICKET_API   = 'https://cricket-live-line1.p.rapidapi.com/liveMatches'
+const FOOTBALL_API  = 'https://allsportsapi2.p.rapidapi.com/api/matches/live'
+const CRICKET_HOST  = 'cricket-live-line1.p.rapidapi.com'
 const FOOTBALL_HOST = 'allsportsapi2.p.rapidapi.com'
 
 const CACHE_TTL = 90   // seconds — KV TTL
@@ -56,20 +60,21 @@ export default async function handler(req, res) {
       headers: {
         'x-rapidapi-key':  process.env.RAPIDAPI_KEY,
         'x-rapidapi-host': host,
+        'Content-Type': 'application/json',
       },
-      signal: AbortSignal.timeout(8000),  // 8s timeout
+      signal: AbortSignal.timeout(10000),
     })
 
     if (!response.ok) {
-      // Rate limit (429) — stale cache দেখাও
-      if (response.status === 429) {
-        const stale = await kv.get(cacheKey).catch(() => null)
-        if (stale) {
-          res.setHeader('Cache-Control', EDGE_CACHE)
-          return res.status(200).json({ source: 'stale_cache', data: stale._data || stale })
-        }
+      // ✅ [Fix] error হলে crash না করিয়ে stale/empty data সহ 200 দাও
+      console.error(`[live-score] RapidAPI ${response.status} for ${sport}`)
+      const stale = await kv.get(cacheKey).catch(() => null)
+      if (stale) {
+        res.setHeader('Cache-Control', EDGE_CACHE)
+        return res.status(200).json({ source: 'stale_cache', data: stale._data || stale })
       }
-      throw new Error(`RapidAPI responded with ${response.status}`)
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({ source: 'error_fallback', data: [], error: `RapidAPI ${response.status}` })
     }
 
     const raw  = await response.json()
@@ -78,14 +83,12 @@ export default async function handler(req, res) {
     // ── 3. KV-তে save ────────────────────────────────
     await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
 
-    // ✅ [Update #1] Edge Cache header
     res.setHeader('Cache-Control', EDGE_CACHE)
     return res.status(200).json({ source: 'api', updatedAt: new Date().toISOString(), data })
 
   } catch (error) {
     console.error('[live-score] Error:', error.message)
 
-    // Fallback — stale KV data দেখাও
     try {
       const stale = await kv.get(cacheKey)
       if (stale) {
@@ -94,41 +97,45 @@ export default async function handler(req, res) {
       }
     } catch {}
 
-    return res.status(500).json({ error: 'Service unavailable. Try again shortly.' })
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).json({ source: 'error_fallback', data: [], error: 'Service temporarily unavailable' })
   }
 }
 
 // ── Normalize different API response shapes ───────────
+// ✅ [Fix] cricket-live-line1 আসলে { data: [...] } shape এ দেয়
 function normalizeMatches(raw, sport) {
   let matches = []
-  if (Array.isArray(raw))            matches = raw
-  else if (Array.isArray(raw?.data)) matches = raw.data
+  if (Array.isArray(raw))                matches = raw
+  else if (Array.isArray(raw?.data))     matches = raw.data
   else if (Array.isArray(raw?.response)) matches = raw.response
+  else if (Array.isArray(raw?.events))   matches = raw.events
+  else if (Array.isArray(raw?.matches))  matches = raw.matches
 
   if (sport === 'cricket') {
     return matches.map(m => ({
       id:        m.match_id  || m.id,
-      name:      m.title     || m.name || `${m.team_a} vs ${m.team_b}`,
-      teams:     [m.team_a,  m.team_b].filter(Boolean),
+      name:      m.title     || m.name || `${m.team_a || 'Team 1'} vs ${m.team_b || 'Team 2'}`,
+      teams:     [m.team_a || 'Team 1', m.team_b || 'Team 2'],
       score:     parseScore(m),
-      status:    m.match_status || m.status,
-      matchType: m.match_type   || m.type,
-      format:    detectFormat(m.match_type || m.title || ''),
+      status:    m.need_run_ball || m.toss || m.match_status || m.status || 'Match info unavailable',
+      matchType: m.series || m.match_type || m.type || 'Match',
+      format:    detectFormat(m.match_type || m.title || m.series || ''),
       isLive:    true,
       venue:     m.venue || '',
-      series:    m.series_name || '',
+      series:    m.series || m.series_name || '',
     }))
   }
 
   // football
   return matches.map(m => ({
-    id:        m.event_key    || m.id,
-    homeTeam:  m.event_home_team || m.homeTeam,
-    awayTeam:  m.event_away_team || m.awayTeam,
-    homeScore: m.event_final_result?.split(' - ')?.[0] ?? m.homeScore ?? null,
-    awayScore: m.event_final_result?.split(' - ')?.[1] ?? m.awayScore ?? null,
+    id:        m.event_key       || m.id,
+    homeTeam:  m.event_home_team || m.homeTeam || m.home?.name,
+    awayTeam:  m.event_away_team || m.awayTeam || m.away?.name,
+    homeScore: m.event_final_result?.split(' - ')?.[0] ?? m.homeScore ?? m.home?.score ?? null,
+    awayScore: m.event_final_result?.split(' - ')?.[1] ?? m.awayScore ?? m.away?.score ?? null,
     minute:    m.event_game_minute || m.minute,
-    status:    m.event_status || 'Live',
+    status:    m.event_status || m.status || 'Live',
     tournament:m.league_name || m.tournament || '',
     isLive:    true,
   }))
@@ -136,13 +143,13 @@ function normalizeMatches(raw, sport) {
 
 function parseScore(m) {
   const scores = []
-  if (m.team_a_scores) scores.push({ team: m.team_a, r: m.team_a_scores, w: m.team_a_wickets, o: m.team_a_over })
-  if (m.team_b_scores) scores.push({ team: m.team_b, r: m.team_b_scores, w: m.team_b_wickets, o: m.team_b_over })
+  scores.push({ team: m.team_a || 'Team 1', r: m.team_a_scores || '0', w: m.team_a_wickets, o: m.team_a_over })
+  scores.push({ team: m.team_b || 'Team 2', r: m.team_b_scores || '0', w: m.team_b_wickets, o: m.team_b_over })
   return scores
 }
 
 function detectFormat(str) {
-  const u = str.toUpperCase()
+  const u = String(str).toUpperCase()
   if (u.includes('TEST'))             return 'Test'
   if (u.includes('ODI'))              return 'ODI'
   if (/T20|IPL|BPL|PSL|BBL/i.test(u)) return 'T20'
