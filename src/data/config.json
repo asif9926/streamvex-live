@@ -1,6 +1,6 @@
 {
   "siteName": "StreamVex Live",
-  "siteUrl": "https://streamvex.live",
+  "siteUrl": "https://streamvex-live.vercel.app/",
   "tagline": "Watch Live Sports Anytime, Anywhere",
   "description": "Free HD live streaming — cricket, football, motorsport and Bangladesh TV channels.",
   "logo": "/logo.png",
@@ -11,7 +11,7 @@
     "twitter":  "https://twitter.com/streamvexlive",
     "telegram": "https://t.me/streamvexlive"
   },
-  "workerUrl": "https://streamvex-proxy.dhdhdhdgdgge.workers.dev",
+  "workerUrl": "https://streamvex-cors-proxy.dhdhdhdgdgge.workers.dev",
   "refreshIntervals": {
     "liveScore":    120,
     "matchResults": 1800,
