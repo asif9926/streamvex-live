@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- ── Favicon & PWA icons ──────────────────────── -->
+    <link rel="icon"             href="/favicon.ico"                    sizes="any" />
+    <link rel="icon"             href="/icons/icon.svg"                 type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest"         href="/manifest.webmanifest" />
+
+    <!-- ── Theme colors ─────────────────────────────── -->
+    <!-- Android Chrome address bar -->
+    <meta name="theme-color" content="#E50914" />
+    <!-- iOS Safari status bar -->
+    <meta name="apple-mobile-web-app-capable"          content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title"            content="StreamVex" />
+
+    <!-- ── Primary SEO ──────────────────────────────── -->
+    <title>StreamVex Live — Watch Live Sports Streaming</title>
+    <meta name="description"
+      content="Watch live sports streaming — cricket, football, and Bangladesh TV channels. Free HD streaming, real-time scores, tournament schedules. No registration required." />
+    <meta name="keywords"
+      content="live sports streaming, cricket live, football live, Bangladesh TV, T Sports live, BPL live, IPL live, World Cup live, HD streaming" />
+    <meta name="author"  content="StreamVex Live" />
+    <meta name="robots"  content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://streamvex.live" />
+
+    <!-- ── Open Graph — Facebook, WhatsApp, Telegram ─ -->
+    <meta property="og:type"        content="website" />
+    <meta property="og:site_name"   content="StreamVex Live" />
+    <meta property="og:title"       content="StreamVex Live — Watch Live Sports Streaming" />
+    <meta property="og:description"
+      content="Watch live cricket, football and Bangladesh TV channels for free. HD quality, real-time scores, no registration." />
+    <meta property="og:image"       content="https://streamvex.live/og-default.png" />
+    <meta property="og:image:width"  content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt"   content="StreamVex Live — Sports Streaming Platform" />
+    <meta property="og:url"         content="https://streamvex.live" />
+    <meta property="og:locale"      content="en_US" />
+
+    <!-- ── Twitter / X Card ─────────────────────────── -->
+    <meta name="twitter:card"        content="summary_large_image" />
+    <meta name="twitter:site"        content="@streamvex" />
+    <meta name="twitter:creator"     content="@streamvex" />
+    <meta name="twitter:title"       content="StreamVex Live — Watch Live Sports Streaming" />
+    <meta name="twitter:description"
+      content="Watch live cricket, football and Bangladesh TV channels for free. HD quality, real-time scores." />
+    <meta name="twitter:image"       content="https://streamvex.live/og-default.png" />
+    <meta name="twitter:image:alt"   content="StreamVex Live" />
+
+    <!-- ── Google Fonts ─────────────────────────────── -->
+    <!-- [Update #4] Inter (body) + Teko (sports scores) -->
+    <!-- preconnect first — reduces DNS lookup latency -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- display=swap — text shows immediately, font swaps in when loaded -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Teko:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- ── Preload critical assets ───────────────────── -->
+    <!-- Logo preload — visible above the fold -->
+    <link rel="preload" href="/logo.png" as="image" />
+
+    <!-- ── Structured Data (JSON-LD) ────────────────── -->
+    <!-- Helps Google understand the site type -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "StreamVex Live",
+      "alternateName": "StreamVex",
+      "url": "https://streamvex.live",
+      "description": "Watch live sports streaming — cricket, football, and Bangladesh TV channels.",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://streamvex.live/sports?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+
+    <!-- ── Security headers (meta tag fallback) ─────── -->
+    <!-- Primary: set these as HTTP response headers in vercel.json -->
+    <!-- These are fallback for environments that don't support headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="Referrer-Policy"        content="strict-origin-when-cross-origin" />
+
+  </head>
+
+  <body>
+    <!-- React mount point -->
+    <div id="root"></div>
+
+    <!-- ── App entry point ───────────────────────────── -->
+    <!-- type="module" — ES modules, Vite processes this -->
+    <script type="module" src="/src/main.jsx"></script>
+
+    <!-- ── No-JS fallback ────────────────────────────── -->
+    <noscript>
+      <div style="
+        display:flex; align-items:center; justify-content:center;
+        min-height:100vh; background:#0A0A0F; color:#fff;
+        font-family:sans-serif; text-align:center; padding:2rem;
+      ">
+        <div>
+          <h1 style="color:#E50914; margin-bottom:1rem;">StreamVex Live</h1>
+          <p style="color:#A0A0B0;">
+            JavaScript is required to run StreamVex Live.<br />
+            Please enable JavaScript in your browser settings.
+          </p>
+        </div>
+      </div>
+    </noscript>
+  </body>
+</html>

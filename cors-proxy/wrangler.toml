@@ -1,0 +1,41 @@
+# cors-proxy/wrangler.toml
+# Cloudflare Worker deploy config
+#
+# Deploy: cd cors-proxy && wrangler deploy
+# Local test: wrangler dev
+#
+# Prerequisites:
+#   npm install -g wrangler
+#   wrangler login
+
+name       = "streamvex-cors-proxy"
+main       = "worker.js"
+compatibility_date = "2024-09-23"
+
+# ── Workers free plan limits ──────────────────────────
+# 100,000 requests/day (free)
+# 10ms CPU time per request
+# 128MB memory
+
+# ── Environment Variables ─────────────────────────────
+# Cloudflare Dashboard > Workers > Settings > Variables তে সেট করো
+# অথবা `wrangler secret put ALLOWED_DOMAINS` দিয়ে
+#
+# ALLOWED_DOMAINS   = "comma,separated,list,of,domains"
+#   (DEFAULT_ALLOWED_DOMAINS list override করতে)
+#   example: "cdn.example.com,stream.provider.net"
+#
+# ALLOW_ALL_DOMAINS = "true"
+#   (সব domain allow — free m3u8 sites এর জন্য, less secure)
+#   Production এ এটা avoid করো
+
+# ── Routes ───────────────────────────────────────────
+# Custom domain দিতে চাইলে এই section uncomment করো:
+# routes = [
+#   { pattern = "proxy.streamvex.live/*", zone_name = "streamvex.live" }
+# ]
+
+# ── Rate Limiting (Cloudflare Dashboard এ set করো) ───
+# Workers > Settings > Rate Limiting Rules:
+#   Threshold: 100 req/min per IP
+#   Action:    Block (429)

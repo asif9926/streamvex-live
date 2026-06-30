@@ -1,0 +1,247 @@
+/* src/index.css — StreamVex Live Global Styles
+   Tailwind directives + custom global CSS
+   Import order matters — base → components → utilities
+*/
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base layer — HTML defaults ──────────────────────── */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    /* Smooth scroll for anchor links */
+    scroll-behavior: smooth;
+    /* Prevent text size adjust on iOS rotation */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: #0A0A0F;   /* brand-bg */
+    color: #FFFFFF;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';  /* Inter optical sizes */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* Root mount point */
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Focus ring — keyboard nav */
+  :focus-visible {
+    outline: 2px solid #E50914;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Remove default focus ring for mouse users */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Selection color */
+  ::selection {
+    background-color: rgba(229, 9, 20, 0.3);
+    color: #ffffff;
+  }
+
+  /* Scrollbar — webkit browsers */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  /* Headings */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  /* Anchors */
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Images */
+  img, video {
+    display: block;
+    max-width: 100%;
+  }
+
+  /* Video element — no default controls styling */
+  video {
+    background: #000;
+  }
+
+  /* Input / button reset */
+  button {
+    cursor: pointer;
+    font-family: inherit;
+  }
+  input, textarea, select {
+    font-family: inherit;
+  }
+}
+
+/* ── Component layer — reusable patterns ─────────────── */
+@layer components {
+
+  /* Glass morphism — Header, Watch nav */
+  .glass {
+    background: rgba(20, 20, 24, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Gradient text — Hero, 404 heading */
+  .gradient-text {
+    background: linear-gradient(135deg, #E50914 0%, #ff6b6b 50%, #ff8c42 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Card hover glow — ChannelCard */
+  .card-glow {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .card-glow:hover {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08),
+                0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Scrollbar hide — tab rows, horizontal scroll */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Live dot — animated red dot in LIVE badge */
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    background-color: #E50914;
+    box-shadow: 0 0 6px rgba(229, 9, 20, 0.8);
+  }
+
+  /* Shimmer skeleton loading */
+  .shimmer {
+    background-image: linear-gradient(
+      90deg,
+      rgba(255,255,255,0)   0%,
+      rgba(255,255,255,0.04) 50%,
+      rgba(255,255,255,0)   100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  /* Page layout wrapper — consistent max-width + padding */
+  .page-container {
+    width: 100%;
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  @media (min-width: 640px) {
+    .page-container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .page-container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+  }
+}
+
+/* ── Utility layer — one-off helpers ─────────────────── */
+@layer utilities {
+
+  /* Text truncation helpers */
+  .line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
+  .line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+  /* Aspect ratios for video */
+  .aspect-video   { aspect-ratio: 16 / 9; }
+  .aspect-4\/3    { aspect-ratio: 4 / 3; }
+
+  /* Safe area insets — iPhone notch / Dynamic Island */
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .pt-safe { padding-top:    env(safe-area-inset-top, 0px); }
+}
+
+/* ── Keyframe animations ─────────────────────────────── */
+
+/* Shimmer — skeleton loading */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* Marquee — Home page ticker / live match ticker */
+@keyframes marquee {
+  0%   { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }  /* -50% because content is doubled */
+}
+
+/* Pulse-live — LIVE badge dot */
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── HLS Video Player global overrides ───────────────── */
+video::-webkit-media-controls {
+  display: none !important;
+}
+video::-webkit-media-controls-enclosure {
+  display: none !important;
+}
+
+/* ── React Router transition ─────────────────────────── */
+/* Framer Motion handles page transitions, these are fallback */
+.page-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 200ms ease, transform 200ms ease;
+}

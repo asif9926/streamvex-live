@@ -1,0 +1,23 @@
+{
+  "siteName": "StreamVex Live",
+  "siteUrl": "https://streamvex.live",
+  "tagline": "Watch Live Sports Anytime, Anywhere",
+  "description": "Free HD live streaming — cricket, football, motorsport and Bangladesh TV channels.",
+  "logo": "/logo.png",
+  "ogImage": "/og-default.png",
+  "primaryColor": "#E50914",
+  "social": {
+    "facebook": "https://facebook.com/streamvexlive",
+    "twitter":  "https://twitter.com/streamvexlive",
+    "telegram": "https://t.me/streamvexlive"
+  },
+  "workerUrl": "https://streamvex-proxy.dhdhdhdgdgge.workers.dev",
+  "refreshIntervals": {
+    "liveScore":    120,
+    "matchResults": 1800,
+    "series":       3600,
+    "upcoming":     1800
+  },
+  "sports": ["Cricket", "Football", "Motorsport", "Boxing", "Tennis"],
+  "bdSubcategories": ["Sports", "News & Sports", "General", "News"]
+}
