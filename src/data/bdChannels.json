@@ -1,32 +1,6 @@
 [
   {
     "id": 101,
-    "name": "T Sports",
-    "category": "বাংলাদেশী টিভি",
-    "subcategory": "Sports",
-    "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/7/7a/T_Sports_logo.svg/120px-T_Sports_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-    "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-    "isLive": true,
-    "isPremium": false,
-    "currentMatch": "Bangladesh vs Sri Lanka — ODI Live",
-    "language": "Bengali"
-  },
-  {
-    "id": 102,
-    "name": "Gazi TV",
-    "category": "বাংলাদেশী টিভি",
-    "subcategory": "News & Sports",
-    "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/4/44/Gazi_TV_logo.svg/120px-Gazi_TV_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-    "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-    "isLive": true,
-    "isPremium": false,
-    "currentMatch": "সরাসরি সম্প্রচার",
-    "language": "Bengali"
-  },
-  {
-    "id": 103,
     "name": "BTV",
     "category": "বাংলাদেশী টিভি",
     "subcategory": "General",
@@ -39,12 +13,26 @@
     "language": "Bengali"
   },
   {
-    "id": 104,
-    "name": "NTV",
+    "id": 102,
+    "name": "Jamuna TV",
+    "category": "বাংলাদেশী টিভি",
+    "subcategory": "News",
+    "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/4/44/Gazi_TV_logo.svg/120px-Gazi_TV_logo.svg.png",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1701/output/index1701.m3u8",
+    "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "isLive": true,
+    "isPremium": false,
+    "currentMatch": "সরাসরি সম্প্রচার",
+    "language": "Bengali"
+  },
+
+  {
+    "id": 103,
+    "name": "Channel 24",
     "category": "বাংলাদেশী টিভি",
     "subcategory": "General",
     "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/8/85/NTV_Bangladesh_logo.svg/120px-NTV_Bangladesh_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1703/output/index.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": true,
     "isPremium": false,
@@ -52,12 +40,12 @@
     "language": "Bengali"
   },
   {
-    "id": 105,
-    "name": "Channel i",
+    "id": 104,
+    "name": "Channel 1",
     "category": "বাংলাদেশী টিভি",
     "subcategory": "General",
     "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/8/87/Channel_i_logo.svg/120px-Channel_i_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1702/output/index.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": true,
     "isPremium": false,
@@ -65,12 +53,12 @@
     "language": "Bengali"
   },
   {
-    "id": 106,
-    "name": "Somoy TV",
+    "id": 105,
+    "name": "Ekattor TV",
     "category": "বাংলাদেশী টিভি",
-    "subcategory": "News",
+    "subcategory": "News & Sports",
     "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/7/7d/Somoy_TV_logo.svg/120px-Somoy_TV_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1705/output/index.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": true,
     "isPremium": false,
@@ -78,12 +66,12 @@
     "language": "Bengali"
   },
   {
-    "id": 107,
-    "name": "Jamuna TV",
+    "id": 106,
+    "name": "News 24",
     "category": "বাংলাদেশী টিভি",
     "subcategory": "News",
     "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/3/3e/Jamuna_Television_Logo.svg/120px-Jamuna_Television_Logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1708/output/index.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": true,
     "isPremium": false,
@@ -91,12 +79,12 @@
     "language": "Bengali"
   },
   {
-    "id": 108,
-    "name": "Independent TV",
+    "id": 107,
+    "name": "Star News",
     "category": "বাংলাদেশী টিভি",
     "subcategory": "News",
     "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/a/a5/Independent_Television_logo.svg/120px-Independent_Television_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1710/output/index1710.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": false,
     "isPremium": false,
@@ -104,12 +92,12 @@
     "language": "Bengali"
   },
   {
-    "id": 109,
-    "name": "RTV",
+    "id": 108,
+    "name": "Dipto TV",
     "category": "বাংলাদেশী টিভি",
     "subcategory": "General",
     "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/e/e0/RTV_logo.svg/120px-RTV_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1711/output/index1711.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": true,
     "isPremium": false,
@@ -117,12 +105,12 @@
     "language": "Bengali"
   },
   {
-    "id": 110,
-    "name": "Mytv",
+    "id": 109,
+    "name": "Bangla Vision",
     "category": "বাংলাদেশী টিভি",
     "subcategory": "General",
     "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/3/3b/My_TV_BD_Logo.png/120px-My_TV_BD_Logo.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1715/output/index.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": false,
     "isPremium": false,
@@ -130,12 +118,12 @@
     "language": "Bengali"
   },
   {
-    "id": 111,
-    "name": "ATN Bangla",
+    "id": 110,
+    "name": "NTV",
     "category": "বাংলাদেশী টিভি",
     "subcategory": "General",
     "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/9/99/ATN_Bangla_logo.svg/120px-ATN_Bangla_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1716/output/index.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": true,
     "isPremium": false,
@@ -143,12 +131,12 @@
     "language": "Bengali"
   },
   {
-    "id": 112,
-    "name": "Ekattor TV",
+    "id": 111,
+    "name": "Akash Go",
     "category": "বাংলাদেশী টিভি",
-    "subcategory": "News",
+    "subcategory": "Sports",
     "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/0/09/Ekattor_TV_logo.svg/120px-Ekattor_TV_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1720/output/index.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": true,
     "isPremium": false,
@@ -156,12 +144,12 @@
     "language": "Bengali"
   },
   {
-    "id": 113,
-    "name": "Desh TV",
+    "id": 112,
+    "name": "Masranga TV",
     "category": "বাংলাদেশী টিভি",
-    "subcategory": "News & Sports",
+    "subcategory": "General",
     "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/e/e7/Desh_TV_logo.svg/120px-Desh_TV_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1722/output/index.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": false,
     "isPremium": false,
@@ -169,12 +157,12 @@
     "language": "Bengali"
   },
   {
-    "id": 114,
-    "name": "BTV World",
+    "id": 113,
+    "name": "Channel i",
     "category": "বাংলাদেশী টিভি",
-    "subcategory": "General",
+    "subcategory": "News",
     "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Bangladesh_Television_logo.svg/120px-Bangladesh_Television_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1723/output/index.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": true,
     "isPremium": false,
@@ -182,16 +170,43 @@
     "language": "Bengali"
   },
   {
-    "id": 115,
-    "name": "Boishakhi TV",
+    "id": 114,
+    "name": "Desh TV",
     "category": "বাংলাদেশী টিভি",
     "subcategory": "General",
     "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/1/16/Boishakhi_TV_logo.svg/120px-Boishakhi_TV_logo.svg.png",
-    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1724/output/index.m3u8",
+    "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "isLive": false,
+    "isPremium": false,
+    "currentMatch": "বৈশাখী বিনোদন",
+    "language": "Bengali"
+  },
+    {
+    "id": 115,
+    "name": "DBC News",
+    "category": "বাংলাদেশী টিভি",
+    "subcategory": "General",
+    "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/1/16/Boishakhi_TV_logo.svg/120px-Boishakhi_TV_logo.svg.png",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1728/output/index.m3u8",
+    "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "isLive": false,
+    "isPremium": false,
+    "currentMatch": "বৈশাখী বিনোদন",
+    "language": "Bengali"
+  },
+    {
+    "id": 116,
+    "name": "Channel 9",
+    "category": "বাংলাদেশী টিভি",
+    "subcategory": "General",
+    "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/1/16/Boishakhi_TV_logo.svg/120px-Boishakhi_TV_logo.svg.png",
+    "streamUrl": "https://owrcovcrpy.gpcdn.net/bpk-tv/1729/output/index.m3u8",
     "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     "isLive": false,
     "isPremium": false,
     "currentMatch": "বৈশাখী বিনোদন",
     "language": "Bengali"
   }
+
 ]
