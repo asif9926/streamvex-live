@@ -7,7 +7,7 @@ import { Helmet } from 'react-helmet-async'
 const SITE_NAME = 'StreamVex Live'
 const DEFAULT_DESC = 'Watch live sports streaming — cricket, football, and Bangladesh TV channels. Free HD streaming.'
 const DEFAULT_OG_IMAGE = '/og-default.png'
-const BASE_URL = 'https://streamvex.live'
+const BASE_URL = 'https://streamvex-live.vercel.app'
 
 export default function PageMeta({
   title,

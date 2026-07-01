@@ -30,7 +30,7 @@ ALLOW_ALL_DOMAINS = "true"
 # ── Routes ───────────────────────────────────────────
 # Custom domain দিতে চাইলে এই section uncomment করো:
 # routes = [
-#   { pattern = "proxy.streamvex.live/*", zone_name = "streamvex.live" }
+#   { pattern = "proxy.streamvex-live.vercel.app/*", zone_name = "streamvex-live.vercel.app" }
 # ]
 
 # ── Rate Limiting (Cloudflare Dashboard এ set করো) ───

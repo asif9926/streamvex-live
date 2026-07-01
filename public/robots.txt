@@ -1,9 +1,9 @@
 # robots.txt — StreamVex Live
-# https://streamvex.live/robots.txt
+# https://streamvex-live.vercel.app/robots.txt
 
 User-agent: *
 Allow: /
 Disallow: /api/
 
 # Sitemap
-Sitemap: https://streamvex.live/sitemap.xml
+Sitemap: https://streamvex-live.vercel.app/sitemap.xml

@@ -276,7 +276,7 @@ export default {
     try {
       // Forward Range header for video seeking
       const upstreamHeaders = {
-        'User-Agent': 'Mozilla/5.0 (compatible; StreamVexProxy/1.0; +https://streamvex.live)',
+        'User-Agent': 'Mozilla/5.0 (compatible; StreamVexProxy/1.0; +https://streamvex-live.vercel.app)',
         'Accept':     '*/*',
         'Origin':     parsedTarget.origin,
         'Referer':    parsedTarget.origin + '/',

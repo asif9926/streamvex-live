@@ -4,7 +4,7 @@
 //
 // Env vars required:
 //   GROQ_API_KEY  — groq.com থেকে free key নাও (blazing fast, free tier)
-//   ALLOWED_ORIGIN — production domain (e.g. https://streamvex.live)
+//   ALLOWED_ORIGIN — production domain (e.g. https://streamvex-live.vercel.app)
 //
 // ✅ [Fix #1] history[] now processed — multi-turn conversation works
 // ✅ [Fix #2] rateLimiter Map cleanup — unbounded memory leak fixed
@@ -51,7 +51,7 @@ function checkRateLimit(clientIp) {
 export default async function handler(req, res) {
   // ── CORS ─────────────────────────────────────────────
   // ✅ [Fix #4] ALLOWED_ORIGIN env var — না থাকলে same-origin fallback
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
   res.setHeader('Access-Control-Allow-Origin',  allowedOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
