@@ -1,20 +1,41 @@
 // corsProxy.js — HLS stream URL → Cloudflare Worker CORS proxy helper
+// Blueprint: src/utils/corsProxy.js
+// Used by: VideoPlayer.jsx
+//
+// কিভাবে কাজ করে:
+//   Third-party .m3u8 URL → Worker এ পাঠানো হয় → Worker CORS header দিয়ে stream serve করে
+//   Worker route: GET https://your-worker.workers.dev/?url=<encoded_stream_url>
+//
+// Setup:
+//   .env.local:  VITE_WORKER_URL=https://your-worker.workers.dev
+//   Vercel:      VITE_WORKER_URL environment variable set করো
 
-// Vercel Environment Variable থেকে লিংকটি নেবে
+// ── Worker base URL ───────────────────────────────────
+// Blueprint supports দুটো env var নাম — দুটোই check করো
 const WORKER_BASE = (
   import.meta.env.VITE_WORKER_URL ||
   import.meta.env.VITE_PROXY_BASE_URL ||
   ''
-).replace(/\/$/, '') // শেষের স্লাশ (/) থাকলে রিমুভ করে দেবে[cite: 5]
+).replace(/\/$/, '')   // trailing slash remove
 
-// Dev মোডে প্রক্সি স্কিপ করার অপশন[cite: 5]
+// ── Dev only: proxy skip করতে VITE_SKIP_PROXY=true ──
 export const SKIP_PROXY =
   import.meta.env.DEV && import.meta.env.VITE_SKIP_PROXY === 'true'
 
+/**
+ * proxyUrl — stream URL কে Worker proxy দিয়ে wrap করো
+ *
+ * @param {string} originalUrl — raw .m3u8 stream URL
+ * @returns {string}           — proxied URL (or original if no worker set)
+ *
+ * @example
+ * const url = proxyUrl('https://cdn.example.com/live/stream.m3u8')
+ * // → 'https://your-worker.workers.dev/?url=https%3A%2F%2Fcdn.example.com%2F...'
+ */
 export function proxyUrl(originalUrl) {
   if (!originalUrl) return ''
 
-  // Same-origin stream হলে প্রক্সির দরকার নেই[cite: 5]
+  // Same-origin stream — proxy দরকার নেই
   if (
     typeof window !== 'undefined' &&
     originalUrl.startsWith(window.location.origin)
@@ -22,7 +43,7 @@ export function proxyUrl(originalUrl) {
     return originalUrl
   }
 
-  // Worker URL সেট না থাকলে কনসোলে ওয়ার্নিং দেবে এবং ডিরেক্ট লিংক পাঠাবে[cite: 5]
+  // Worker URL set না থাকলে → direct URL (CORS fail হতে পারে)
   if (!WORKER_BASE) {
     if (import.meta.env.DEV) {
       console.warn(
@@ -33,18 +54,25 @@ export function proxyUrl(originalUrl) {
     return originalUrl
   }
 
-  // প্রক্সির লিংক তৈরি করে রিটার্ন করবে[cite: 5]
   return `${WORKER_BASE}/?url=${encodeURIComponent(originalUrl)}`
 }
 
+/**
+ * isProxied — URL টা already proxy দিয়ে wrap করা কিনা check করো
+ * (double-proxying এড়ানোর জন্য)
+ */
 export function isProxied(url) {
   if (!WORKER_BASE || !url) return false
-  return url.startsWith(WORKER_BASE)[cite: 5]
+  return url.startsWith(WORKER_BASE)
 }
 
+/**
+ * resolveStreamUrl — VideoPlayer এ use করার জন্য main helper
+ * SKIP_PROXY + isProxied + proxyUrl সব handle করে
+ */
 export function resolveStreamUrl(url) {
   if (!url) return ''
-  if (SKIP_PROXY) return url[cite: 5]
-  if (isProxied(url)) return url[cite: 5]
-  return proxyUrl(url)[cite: 5]
+  if (SKIP_PROXY) return url
+  if (isProxied(url)) return url
+  return proxyUrl(url)
 }
