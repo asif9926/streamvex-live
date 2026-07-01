@@ -61,6 +61,7 @@ const DEFAULT_ALLOWED_DOMAINS = [
   'bongobdlive.com',
   't-sports.live',
   'gpcdn.net',   // ✅ [Audit Fix] used by BD channel data (src/data/bdChannels.json)
+  '103.114.11.37',  // for t-sports
 
   // ── Generic CDN patterns ──
   // যেকোনো .live, .stream domain থেকে m3u8 allow করতে নিচের
