@@ -48,10 +48,11 @@ export default function Header() {
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search channels, matches…"
+            aria-label="Search channels and matches"
             className="w-full bg-brand-elevated border border-brand-border rounded-lg pl-9 pr-8 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-brand-red/50 transition-colors"
           />
           {query && (
-            <button type="button" onClick={clearSearch}
+            <button type="button" onClick={clearSearch} aria-label="Clear search"
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                 <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
@@ -73,6 +74,8 @@ export default function Header() {
 
         {/* Mobile menu toggle */}
         <button onClick={() => setMobile(p => !p)}
+                aria-label={mobile ? 'Close menu' : 'Open menu'}
+                aria-expanded={mobile}
                 className="lg:hidden p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/5 transition-all">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
             {mobile

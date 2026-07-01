@@ -12,7 +12,12 @@
 // ✅ [Fix #4] CORS locked to ALLOWED_ORIGIN env var
 
 const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions'
-const MODEL      = 'llama3-70b-8192'    // Blueprint exact spec
+// ✅ [Audit Fix — Critical] 'llama3-70b-8192' was fully decommissioned by Groq
+// (May 2025) — every request was returning HTTP 400 invalid_request_error.
+// 'llama-3.3-70b-versatile' (the direct successor) has since also been
+// deprecated (June 2026 notice). Using Groq's current recommended
+// production model instead.
+const MODEL      = 'openai/gpt-oss-120b'
 const MAX_TOKENS = 200                   // Blueprint: "2-3 sentences max"
 
 // ── Rate limiter ──────────────────────────────────────

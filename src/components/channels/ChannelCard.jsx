@@ -47,6 +47,8 @@ export default function ChannelCard({ channel, index = 0 }) {
               src={channel.logo}
               alt={channel.name}
               className="w-10 h-10 object-contain"
+              loading="lazy"
+              decoding="async"
               onError={(e) => { e.target.style.display = 'none' }}
             />
           </div>

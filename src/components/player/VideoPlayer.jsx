@@ -27,6 +27,7 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
   const containerRef = useRef(null)
   const hideTimer    = useRef(null)
   const retriesRef   = useRef(0)
+  const mediaRetriesRef = useRef(0)   // ✅ [Audit Fix] separate retry counter for MEDIA_ERROR recovery
 
   const [playing,      setPlaying]      = useState(false)
   const [muted,        setMuted]        = useState(false)
@@ -88,6 +89,21 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
           } else {
             setError('Stream unavailable. Please try another channel.')
           }
+        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          // ✅ [Audit Fix] Media errors (e.g. buffer stalls, decode glitches)
+          // are usually recoverable in-place — try hls.js's built-in
+          // recovery before giving up on the stream and switching/destroying.
+          if (mediaRetriesRef.current < 3) {
+            mediaRetriesRef.current++
+            hls.recoverMediaError()
+          } else if (backupResolved && url !== backupResolved) {
+            mediaRetriesRef.current = 0
+            hls.destroy()
+            retriesRef.current = 0; initHls(backupUrl)
+          } else {
+            hls.destroy()
+            setError('Playback error. Try refreshing the page.')
+          }
         } else {
           hls.destroy()
           if (backupResolved && url !== backupResolved) {
@@ -108,7 +124,7 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
   }, [backupUrl])
 
   useEffect(() => {
-    if (streamUrl) { retriesRef.current = 0; initHls(streamUrl) }
+    if (streamUrl) { retriesRef.current = 0; mediaRetriesRef.current = 0; initHls(streamUrl) }
     return () => { if (hlsRef.current) hlsRef.current.destroy() }
   }, [streamUrl]) // eslint-disable-line react-hooks/exhaustive-deps -- intentional: only reload on streamUrl change, not on every initHls identity change
 
@@ -240,7 +256,7 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
             <p className="text-white font-semibold mb-1">{error}</p>
             <p className="text-white/40 text-xs mb-4">Check your connection or try another channel.</p>
             <button
-              onClick={() => { retriesRef.current = 0; initHls(streamUrl) }}
+              onClick={() => { retriesRef.current = 0; mediaRetriesRef.current = 0; initHls(streamUrl) }}
               className="px-5 py-2 bg-brand-red text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
             >↺ Retry</button>
           </div>
@@ -261,6 +277,7 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
             <select
               value={currentLevel}
               onChange={e => setQualityLevel(Number(e.target.value))}
+              aria-label="Video quality"
               className="bg-black/60 text-white text-xs border border-white/20 rounded px-2 py-1 focus:outline-none cursor-pointer flex-shrink-0"
             >
               <option value={-1}>Auto</option>
@@ -272,6 +289,7 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
         {/* Center play button */}
         <button
           onClick={togglePlay}
+          aria-label={playing ? 'Pause' : 'Play'}
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-black/50 border border-white/20 flex items-center justify-center hover:bg-black/70 transition-all hover:scale-110"
         >
           {playing
@@ -285,19 +303,20 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
           {!isLive && (
             <input type="range" min={0} max={duration || 0} value={currentTime}
               onChange={e => { if (videoRef.current) videoRef.current.currentTime = Number(e.target.value) }}
+              aria-label="Seek"
               className="w-full h-1 mb-3 accent-brand-red cursor-pointer"
             />
           )}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <button onClick={togglePlay} className="text-white hover:text-brand-red transition-colors p-1">
+              <button onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'} className="text-white hover:text-brand-red transition-colors p-1">
                 {playing
                   ? <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path d="M5.75 3a.75.75 0 0 0-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 .75-.75V3.75A.75.75 0 0 0 7.25 3h-1.5ZM12.75 3a.75.75 0 0 0-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 .75-.75V3.75a.75.75 0 0 0-.75-.75h-1.5Z" /></svg>
                   : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v11.78a1.5 1.5 0 0 0 2.3 1.27l9.344-5.891a1.5 1.5 0 0 0 0-2.538L6.3 2.841Z" /></svg>
                 }
               </button>
               <div className="flex items-center gap-1.5 group/vol">
-                <button onClick={toggleMute} className="text-white hover:text-brand-red transition-colors p-1">
+                <button onClick={toggleMute} aria-label={muted || volume === 0 ? 'Unmute' : 'Mute'} className="text-white hover:text-brand-red transition-colors p-1">
                   {muted || volume === 0
                     ? <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path d="M9.547 3.062A.75.75 0 0 1 10 3.75v12.5a.75.75 0 0 1-1.264.546L4.703 13H3.167a.75.75 0 0 1-.7-.48A6.985 6.985 0 0 1 2 10c0-.887.165-1.737.468-2.52a.75.75 0 0 1 .699-.48h1.535l4.033-3.796a.75.75 0 0 1 .812-.142ZM13.28 7.22a.75.75 0 1 0-1.06 1.06L13.44 9.5l-1.22 1.22a.75.75 0 1 0 1.06 1.06l1.22-1.22 1.22 1.22a.75.75 0 1 0 1.06-1.06L15.56 9.5l1.22-1.22a.75.75 0 0 0-1.06-1.06L14.5 8.44l-1.22-1.22Z" /></svg>
                     : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path d="M10 3.75a.75.75 0 0 0-1.264-.546L4.703 7H3.167a.75.75 0 0 0-.7.48A6.985 6.985 0 0 0 2 10c0 .887.165 1.737.468 2.52.111.29.39.48.7.48h1.535l4.033 3.796A.75.75 0 0 0 10 16.25V3.75ZM15.95 5.05a.75.75 0 0 0-1.06 1.061 6.5 6.5 0 0 1 0 7.778.75.75 0 0 0 1.06 1.06 8 8 0 0 0 0-9.899Z" /><path d="M13.829 7.172a.75.75 0 0 0-1.061 1.06 3.5 3.5 0 0 1 0 3.536.75.75 0 0 0 1.06 1.06 5 5 0 0 0 0-5.656Z" /></svg>
@@ -305,22 +324,23 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
                 </button>
                 <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume}
                   onChange={e => changeVolume(Number(e.target.value))}
+                  aria-label="Volume"
                   className="w-16 h-1 accent-white opacity-0 group-hover/vol:opacity-100 transition-opacity cursor-pointer"
                 />
               </div>
               {isLive
-                ? <button onClick={seekToLive} className="text-xs text-brand-red font-semibold hover:text-white transition-colors">● LIVE</button>
+                ? <button onClick={seekToLive} aria-label="Jump to live" className="text-xs text-brand-red font-semibold hover:text-white transition-colors">● LIVE</button>
                 : <span className="text-white/60 text-xs tabular-nums">{formatTime(currentTime)} / {formatTime(duration)}</span>
               }
             </div>
             <div className="flex items-center gap-1">
               {document.pictureInPictureEnabled && (
-                <button onClick={togglePip} title="Picture in Picture"
+                <button onClick={togglePip} title="Picture in Picture" aria-label="Picture in Picture"
                   className={`p-1.5 rounded transition-colors ${pip ? 'text-brand-red' : 'text-white/70 hover:text-white'}`}>
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="M2.5 5A1.5 1.5 0 0 0 1 6.5v7A1.5 1.5 0 0 0 2.5 15h15a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 17.5 5h-15Zm9 4h5.5v4H11.5V9Z" /></svg>
                 </button>
               )}
-              <button onClick={toggleFullscreen} title="Fullscreen (F)" className="p-1.5 rounded text-white/70 hover:text-white transition-colors">
+              <button onClick={toggleFullscreen} title="Fullscreen (F)" aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} className="p-1.5 rounded text-white/70 hover:text-white transition-colors">
                 {fullscreen
                   ? <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M3.28 2.22a.75.75 0 0 0-1.06 1.06L5.44 6.5H2.75a.75.75 0 0 0 0 1.5h4.5A.75.75 0 0 0 8 7.25v-4.5a.75.75 0 0 0-1.5 0v2.69L3.28 2.22ZM13.5 2.75a.75.75 0 0 0-1.5 0v4.5c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-2.69l3.22-3.22a.75.75 0 0 0-1.06-1.06L13.5 5.44V2.75ZM3.75 13H2.25a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 .75-.75v-4.5a.75.75 0 0 0-1.5 0v2.69L2.78 8.72a.75.75 0 0 0-1.06 1.06L5.44 13H3.75ZM13.5 13.25v2.69l3.22-3.22a.75.75 0 1 1 1.06 1.06L14.56 17h2.69a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 1 1.5 0Z" clipRule="evenodd" /></svg>
                   : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M1 3.75A.75.75 0 0 1 1.75 3h5a.75.75 0 0 1 0 1.5H3.56l3.72 3.72a.75.75 0 0 1-1.06 1.06L2.5 5.56v3.19a.75.75 0 0 1-1.5 0v-5Zm18 0a.75.75 0 0 0-.75-.75h-5a.75.75 0 0 0 0 1.5h3.19l-3.72 3.72a.75.75 0 1 0 1.06 1.06l3.72-3.72v3.19a.75.75 0 0 0 1.5 0v-5ZM1 16.25a.75.75 0 0 0 .75.75h5a.75.75 0 0 0 0-1.5H3.56l3.72-3.72a.75.75 0 0 0-1.06-1.06L2.5 14.44v-3.19a.75.75 0 0 0-1.5 0v5Zm18 0a.75.75 0 0 1-.75.75h-5a.75.75 0 0 1 0-1.5h3.19l-3.72-3.72a.75.75 0 1 1 1.06-1.06l3.72 3.72v-3.19a.75.75 0 0 1 1.5 0v5Z" clipRule="evenodd" /></svg>

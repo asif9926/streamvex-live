@@ -13,6 +13,9 @@ import ErrorBoundary        from '../components/ui/ErrorBoundary.jsx'
 import ScoreSkeleton        from '../components/scoring/ScoreSkeleton.jsx'
 import CricketScoreCard     from '../components/scoring/CricketScoreCard.jsx'
 import FootballScoreCard    from '../components/scoring/FootballScoreCard.jsx'
+// ✅ [Audit Fix] AIChatPanel was built but never wired into any page —
+// surfacing it here per the original blueprint (AI Match Analyst on Live Score)
+import AIChatPanel          from '../components/scoring/AIChatPanel.jsx'
 
 const SPORT_TABS = [
   { id: 'cricket',  label: '🏏 Cricket'  },
@@ -121,6 +124,14 @@ export default function LiveScoring() {
                     : <FootballScoreCard key={match.id ?? i} match={match} />
                 )}
               </div>
+            </ErrorBoundary>
+          )}
+
+          {/* ✅ [Audit Fix] AI Match Analyst — only shown once there's actual
+              live-match data for it to reason about */}
+          {!loading && !isError && hasLive && (
+            <ErrorBoundary label="AI Match Analyst">
+              <AIChatPanel matchContext={liveMatches} />
             </ErrorBoundary>
           )}
 

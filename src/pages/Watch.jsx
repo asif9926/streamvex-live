@@ -36,8 +36,12 @@ export default function Watch() {
   // during the previous render" crashes when navigating between a valid
   // channel and an invalid one (e.g. /watch/5 → /watch/does-not-exist).
   const playerRef  = useRef(null)
-  const [isMini, setIsMini]           = useState(false)
-  const [miniVisible, setMiniVisible] = useState(false)
+  const [isMini, setIsMini]       = useState(false)
+  // ✅ [Audit Fix] miniHidden = user dismissed the floating mini-player chrome
+  // (via the X button) while still scrolled past the main player. Playback
+  // keeps running — this only hides the floating overlay, matching the
+  // original UX intent (closing the corner widget shouldn't stop the stream).
+  const [miniHidden, setMiniHidden] = useState(false)
 
   useEffect(() => {
     if (!channel) return   // guard: nothing to track if channel not found
@@ -46,7 +50,7 @@ export default function Watch() {
       const rect = playerRef.current.getBoundingClientRect()
       const gone = rect.bottom < 56
       setIsMini(gone)
-      if (gone) setMiniVisible(true)
+      if (!gone) setMiniHidden(false)   // reset dismiss-state once back at the top
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
@@ -116,53 +120,65 @@ export default function Watch() {
       <div className="flex flex-col xl:flex-row min-h-[calc(100vh-56px)]">
         <div className="flex-1 min-w-0 p-4 xl:p-6 xl:pr-3">
 
+          {/* ── Video player ──────────────────────────────────────────
+              ✅ [Audit Fix — Critical] Previously this rendered a SECOND,
+              independent <VideoPlayer> for the floating mini view, which
+              meant two simultaneous HLS sessions playing the same stream
+              at once — double audio, double bandwidth/CPU. Now there is
+              exactly one <VideoPlayer> instance; only its CSS position
+              changes between "inline" and "floating corner" as the user
+              scrolls, so playback never restarts or duplicates. */}
           <div ref={playerRef}>
-            <motion.div initial={{ opacity: 0, scale: 0.99 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3 }}>
+            {/* Placeholder — keeps this spot's height reserved once the
+                real player switches to `position: fixed` below, so the
+                rest of the page doesn't jump. */}
+            {isMini && <div className="w-full rounded-xl bg-black/40" style={{ aspectRatio: '16/9' }} />}
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.99 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className={
+                isMini
+                  ? `fixed bottom-5 right-4 z-[999] w-72 sm:w-80 shadow-2xl shadow-black/60 rounded-xl overflow-hidden border border-white/10 transition-opacity duration-200 ${
+                      miniHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                    }`
+                  : ''
+              }
+            >
+              {isMini && (
+                <div className="flex items-center justify-between gap-2 px-3 py-2 bg-brand-elevated border-b border-white/10">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {channel.isLive && (
+                      <span className="flex items-center gap-1 text-[9px] font-black text-brand-red shrink-0">
+                        <span className="w-1.5 h-1.5 bg-brand-red rounded-full animate-ping" />LIVE
+                      </span>
+                    )}
+                    <p className="text-xs font-semibold text-white truncate">{channel.currentMatch || channel.name}</p>
+                  </div>
+                  <button
+                    onClick={() => { setIsMini(false); playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
+                    className="shrink-0 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                    aria-label="Expand player"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-white/70 rotate-180">
+                      <path fillRule="evenodd" d="M10 3a.75.75 0 0 1 .75.75v10.638l3.96-4.158a.75.75 0 1 1 1.08 1.04l-5.25 5.5a.75.75 0 0 1-1.08 0l-5.25-5.5a.75.75 0 1 1 1.08-1.04l3.96 4.158V3.75A.75.75 0 0 1 10 3Z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  <button onClick={() => setMiniHidden(true)}
+                    className="shrink-0 w-6 h-6 rounded-full bg-white/10 hover:bg-red-500/40 flex items-center justify-center transition-colors"
+                    aria-label="Hide mini player">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-white/60">
+                      <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                    </svg>
+                  </button>
+                </div>
+              )}
               <ErrorBoundary label="Video Player">
                 <VideoPlayer streamUrl={channel.streamUrl} backupUrl={channel.backupUrl} title={channel.currentMatch} />
               </ErrorBoundary>
             </motion.div>
           </div>
-
-          {/* Mini floating player */}
-          {miniVisible && (
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: isMini ? 1 : 0, y: isMini ? 0 : 20, scale: isMini ? 1 : 0.95 }}
-              transition={{ duration: 0.25 }}
-              onAnimationComplete={() => { if (!isMini) setMiniVisible(false) }}
-              className="fixed bottom-5 right-4 z-[999] w-72 sm:w-80 shadow-2xl shadow-black/60 rounded-xl overflow-hidden border border-white/10"
-              style={{ pointerEvents: isMini ? 'auto' : 'none' }}
-            >
-              <div className="flex items-center justify-between gap-2 px-3 py-2 bg-brand-elevated border-b border-white/10">
-                <div className="flex items-center gap-2 min-w-0">
-                  {channel.isLive && (
-                    <span className="flex items-center gap-1 text-[9px] font-black text-brand-red shrink-0">
-                      <span className="w-1.5 h-1.5 bg-brand-red rounded-full animate-ping" />LIVE
-                    </span>
-                  )}
-                  <p className="text-xs font-semibold text-white truncate">{channel.currentMatch || channel.name}</p>
-                </div>
-                <button
-                  onClick={() => { setMiniVisible(false); setIsMini(false); playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
-                  className="shrink-0 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-white/70 rotate-180">
-                    <path fillRule="evenodd" d="M10 3a.75.75 0 0 1 .75.75v10.638l3.96-4.158a.75.75 0 1 1 1.08 1.04l-5.25 5.5a.75.75 0 0 1-1.08 0l-5.25-5.5a.75.75 0 1 1 1.08-1.04l3.96 4.158V3.75A.75.75 0 0 1 10 3Z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                <button onClick={() => setMiniVisible(false)}
-                  className="shrink-0 w-6 h-6 rounded-full bg-white/10 hover:bg-red-500/40 flex items-center justify-center transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-white/60">
-                    <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-                  </svg>
-                </button>
-              </div>
-              <div className="aspect-video bg-black">
-                <VideoPlayer streamUrl={channel.streamUrl} backupUrl={channel.backupUrl} title={channel.currentMatch} />
-              </div>
-            </motion.div>
-          )}
 
           {/* Channel info bar */}
           <div className="flex items-center gap-4 mt-4 pb-4 border-b border-brand-border">
@@ -464,6 +480,7 @@ function RelatedCard({ channel }) {
       className="flex items-center gap-3 p-3 rounded-xl bg-brand-surface hover:bg-brand-elevated border border-brand-border hover:border-white/20 transition-all text-left group w-full">
       <div className="w-10 h-10 rounded-lg bg-brand-elevated flex items-center justify-center overflow-hidden flex-shrink-0 border border-brand-border">
         <img src={channel.logo} alt={channel.name} className="w-8 h-8 object-contain"
+          loading="lazy" decoding="async"
           onError={e => { e.target.style.display = 'none' }} />
       </div>
       <div className="flex-1 min-w-0">

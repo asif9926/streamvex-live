@@ -1,7 +1,7 @@
 // useMatchResults.js — Completed match results hook
 // Blueprint: src/hooks/useMatchResults.js
 // API: /api/match-results → RapidAPI → Vercel KV (30-60 min cache)
-// Used by: Tournament page (Results tab), MatchStats component
+// Used by: Tournament page (Results tab)
 
 import useSWR from 'swr'
 

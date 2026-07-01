@@ -1,6 +1,6 @@
 // corsProxy.js — HLS stream URL → Cloudflare Worker CORS proxy helper
 // Blueprint: src/utils/corsProxy.js
-// Used by: VideoPlayer.jsx, useHLS.js
+// Used by: VideoPlayer.jsx
 //
 // কিভাবে কাজ করে:
 //   Third-party .m3u8 URL → Worker এ পাঠানো হয় → Worker CORS header দিয়ে stream serve করে

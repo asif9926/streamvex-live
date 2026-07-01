@@ -18,20 +18,37 @@
 
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence }            from 'framer-motion'
+import { lazy, Suspense }             from 'react'
 
 import Header   from './components/layout/Header.jsx'
 import Sidebar  from './components/layout/Sidebar.jsx'
 import Footer   from './components/layout/Footer.jsx'
 import ErrorBoundary from './components/ui/ErrorBoundary.jsx'
+import { SkeletonCard } from './components/ui/Skeleton.jsx'
 
-import Home          from './pages/Home.jsx'
-import Sports        from './pages/Sports.jsx'
-import BangladeshiTV from './pages/BangladeshiTV.jsx'
-import LiveScore      from './pages/LiveScore.jsx'
-import Tournament     from './pages/Tournament.jsx'
-import Favorites      from './pages/Favorites.jsx'
-import Watch           from './pages/Watch.jsx'
-import NotFound        from './pages/NotFound.jsx'
+// ✅ [Perf Fix] Route-level code splitting — previously every page
+// (including Watch.jsx / VideoPlayer / Tournament / LiveScore) was
+// eagerly bundled into the single initial JS chunk, so a person just
+// visiting the homepage downloaded and parsed code for every other page
+// up front. Only Home stays eager (it's the most likely landing route);
+// everything else loads on demand via React.lazy.
+import Home from './pages/Home.jsx'
+const Sports        = lazy(() => import('./pages/Sports.jsx'))
+const BangladeshiTV  = lazy(() => import('./pages/BangladeshiTV.jsx'))
+const LiveScore       = lazy(() => import('./pages/LiveScore.jsx'))
+const Tournament       = lazy(() => import('./pages/Tournament.jsx'))
+const Favorites          = lazy(() => import('./pages/Favorites.jsx'))
+const Watch                = lazy(() => import('./pages/Watch.jsx'))
+const NotFound                = lazy(() => import('./pages/NotFound.jsx'))
+
+// Lightweight fallback shown while a lazy page chunk downloads
+function PageFallback() {
+  return (
+    <div className="p-4 xl:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {[...Array(6)].map((_, i) => <SkeletonCard key={i} />)}
+    </div>
+  )
+}
 
 export default function App() {
   const location = useLocation()
@@ -42,11 +59,13 @@ export default function App() {
   if (isWatchPage) {
     return (
       <ErrorBoundary label="App">
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route path="/watch/:id" element={<Watch />} />
-          </Routes>
-        </AnimatePresence>
+        <Suspense fallback={<div className="min-h-screen bg-brand-bg" />}>
+          <AnimatePresence mode="wait">
+            <Routes location={location} key={location.pathname}>
+              <Route path="/watch/:id" element={<Watch />} />
+            </Routes>
+          </AnimatePresence>
+        </Suspense>
       </ErrorBoundary>
     )
   }
@@ -61,17 +80,19 @@ export default function App() {
 
         {/* Main content area — ml-64 matches Sidebar's fixed w-64 */}
         <main className="flex-1 min-w-0 lg:ml-64">
-          <AnimatePresence mode="wait">
-            <Routes location={location} key={location.pathname}>
-              <Route path="/"              element={<Home />} />
-              <Route path="/sports"        element={<Sports />} />
-              <Route path="/bangladesh-tv" element={<BangladeshiTV />} />
-              <Route path="/live-score"    element={<LiveScore />} />
-              <Route path="/tournament"    element={<Tournament />} />
-              <Route path="/favorites"     element={<Favorites />} />
-              <Route path="*"              element={<NotFound />} />
-            </Routes>
-          </AnimatePresence>
+          <Suspense fallback={<PageFallback />}>
+            <AnimatePresence mode="wait">
+              <Routes location={location} key={location.pathname}>
+                <Route path="/"              element={<Home />} />
+                <Route path="/sports"        element={<Sports />} />
+                <Route path="/bangladesh-tv" element={<BangladeshiTV />} />
+                <Route path="/live-score"    element={<LiveScore />} />
+                <Route path="/tournament"    element={<Tournament />} />
+                <Route path="/favorites"     element={<Favorites />} />
+                <Route path="*"              element={<NotFound />} />
+              </Routes>
+            </AnimatePresence>
+          </Suspense>
 
           <Footer />
         </main>
