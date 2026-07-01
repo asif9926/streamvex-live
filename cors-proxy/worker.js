@@ -60,6 +60,7 @@ const DEFAULT_ALLOWED_DOMAINS = [
   'rabbitmvlive.com',
   'bongobdlive.com',
   't-sports.live',
+  'gpcdn.net',   // ✅ [Audit Fix] used by BD channel data (src/data/bdChannels.json)
 
   // ── Generic CDN patterns ──
   // যেকোনো .live, .stream domain থেকে m3u8 allow করতে নিচের
@@ -158,6 +159,55 @@ function corsHeaders(origin) {
     'Access-Control-Expose-Headers':    'Content-Length, Content-Range, Content-Type',
     'Access-Control-Max-Age':           '86400',
   }
+}
+
+// ─────────────────────────────────────────────────────
+// Helper — rewrite .m3u8 manifest body so every segment /
+// sub-playlist / key URI routes back through this worker
+// ─────────────────────────────────────────────────────
+// ✅ [Audit Fix — Critical] Without this, the worker only proxies the
+// manifest itself. Any segment (.ts) or nested playlist referenced
+// inside it — relative OR absolute — still points straight at the
+// origin CDN, so the browser's segment requests bypass the proxy and
+// hit the exact CORS wall this worker exists to work around. This is
+// why "some" streams appeared to work (self-hosted / already-CORS-open
+// origins) while real third-party CDNs silently failed to play.
+function rewriteManifest(manifestText, targetUrl, workerOrigin) {
+  let baseUrl
+  try {
+    baseUrl = new URL(targetUrl)
+  } catch {
+    return manifestText   // shouldn't happen — already validated upstream
+  }
+
+  const toProxied = (rawUri) => {
+    let absolute
+    try {
+      absolute = new URL(rawUri, baseUrl).href
+    } catch {
+      return rawUri   // malformed URI — leave untouched rather than break playback
+    }
+    return `${workerOrigin}/?url=${encodeURIComponent(absolute)}`
+  }
+
+  const lines = manifestText.split(/\r?\n/)
+
+  const rewritten = lines.map((line) => {
+    const trimmed = line.trim()
+    if (!trimmed) return line
+
+    // ── Tag lines carrying URI="..." (#EXT-X-KEY, #EXT-X-MAP, #EXT-X-MEDIA, etc.) ──
+    if (trimmed.startsWith('#')) {
+      const uriMatch = trimmed.match(/URI="([^"]+)"/)
+      if (!uriMatch) return line
+      return line.replace(uriMatch[1], toProxied(uriMatch[1]))
+    }
+
+    // ── Plain URI line — media segment (.ts) or nested/variant playlist (.m3u8) ──
+    return toProxied(trimmed)
+  })
+
+  return rewritten.join('\n')
 }
 
 // ─────────────────────────────────────────────────────
@@ -294,12 +344,32 @@ export default {
       }
 
       // Cache-Control for manifest vs segment
-      if (parsedTarget.pathname.endsWith('.m3u8')) {
+      const isManifest = parsedTarget.pathname.endsWith('.m3u8') || parsedTarget.pathname.endsWith('.m3u')
+      if (isManifest) {
         // Live manifest — always fresh
         responseHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate')
       } else if (parsedTarget.pathname.endsWith('.ts')) {
         // Segments are immutable — long cache
         responseHeaders.set('Cache-Control', 'public, max-age=3600, immutable')
+      }
+
+      // ── ✅ [Audit Fix — Critical] Rewrite manifest body ──────────
+      // GET .m3u8/.m3u responses must have every segment / sub-playlist /
+      // key URI rewritten to route back through this same worker,
+      // otherwise the browser fetches them directly from the origin CDN
+      // and hits the exact CORS wall this proxy exists to solve.
+      // (HEAD requests have no body to rewrite — passthrough as-is.)
+      if (isManifest && method === 'GET') {
+        const manifestText = await upstreamResponse.text()
+        const rewritten     = rewriteManifest(manifestText, decodedUrl, url.origin)
+
+        // Body size changed — let the platform recompute Content-Length
+        responseHeaders.delete('Content-Length')
+
+        return new Response(rewritten, {
+          status:  upstreamResponse.status,
+          headers: responseHeaders,
+        })
       }
 
       return new Response(upstreamResponse.body, {
