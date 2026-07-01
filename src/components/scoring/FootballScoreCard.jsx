@@ -1,10 +1,20 @@
 // FootballScoreCard.jsx — [Update #4] Teko font for score numbers
+// ✅ [Bug Fix] Wrapped with its own ErrorBoundary (CricketScoreCard already
+// had this, FootballScoreCard didn't) — previously if even one match in
+// the list had an unexpected data shape, the whole "Live Score Grid"
+// crashed for every match, because they all shared a single ErrorBoundary
+// one level up. Now each card fails independently.
 
-export default function FootballScoreCard({ match }) {
+import ErrorBoundary from '../ui/ErrorBoundary.jsx'
+
+function FootballScoreCardInner({ match }) {
   if (!match) return null
 
-  const hScore = parseInt(match.homeScore ?? match.goals?.[0] ?? '')
-  const aScore = parseInt(match.awayScore ?? match.goals?.[1] ?? '')
+  // ✅ [Bug Fix] String(...) coercion before parseInt — homeScore/awayScore
+  // could arrive as number, string, or null depending on API response
+  // shape; parseInt on a non-string/non-number could throw in edge cases.
+  const hScore = parseInt(String(match.homeScore ?? match.goals?.[0] ?? ''), 10)
+  const aScore = parseInt(String(match.awayScore ?? match.goals?.[1] ?? ''), 10)
   const hWin = !match.isLive && !isNaN(hScore) && !isNaN(aScore) && hScore > aScore
   const aWin = !match.isLive && !isNaN(hScore) && !isNaN(aScore) && aScore > hScore
 
@@ -58,5 +68,13 @@ export default function FootballScoreCard({ match }) {
         </div>
       )}
     </div>
+  )
+}
+
+export default function FootballScoreCard(props) {
+  return (
+    <ErrorBoundary label="Football Score Card">
+      <FootballScoreCardInner {...props} />
+    </ErrorBoundary>
   )
 }

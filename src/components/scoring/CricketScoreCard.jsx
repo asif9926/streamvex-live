@@ -2,14 +2,26 @@
 
 import ErrorBoundary from '../ui/ErrorBoundary.jsx'
 
+// ✅ [Bug Fix] Previously this manually did `${s1.r}/${s1.w}`, which
+// rendered "203-7/undefined" whenever the API's wicket field (`w`) was
+// missing — RapidAPI's cricket-live-line1 actually returns the score
+// already combined (e.g. r: "203-7") with no separate wickets field.
+// Only append "/{wicket}" when that field genuinely exists, so this
+// renders correctly regardless of which shape the API sends.
+function formatRuns(s) {
+  if (!s) return '—'
+  const wicket = s.w ?? s.wickets
+  return wicket !== undefined && wicket !== null ? `${s.r}/${wicket}` : `${s.r ?? '—'}`
+}
+
 function CricketScoreCardInner({ match }) {
   if (!match) return null
 
   const [t1, t2] = match.teams || ['Team 1', 'Team 2']
   const s1 = match.score?.[0]
   const s2 = match.score?.[1]
-  const score1 = s1 ? `${s1.r}/${s1.w}` : '—'
-  const score2 = s2 ? `${s2.r}/${s2.w}` : '—'
+  const score1 = formatRuns(s1)
+  const score2 = formatRuns(s2)
   const overs1 = s1?.o ? `(${s1.o} ov)` : ''
   const overs2 = s2?.o ? `(${s2.o} ov)` : ''
 

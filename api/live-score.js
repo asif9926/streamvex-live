@@ -128,17 +128,34 @@ function normalizeMatches(raw, sport) {
   }
 
   // football
-  return matches.map(m => ({
-    id:        m.event_key       || m.id,
-    homeTeam:  m.event_home_team || m.homeTeam || m.home?.name,
-    awayTeam:  m.event_away_team || m.awayTeam || m.away?.name,
-    homeScore: m.event_final_result?.split(' - ')?.[0] ?? m.homeScore ?? m.home?.score ?? null,
-    awayScore: m.event_final_result?.split(' - ')?.[1] ?? m.awayScore ?? m.away?.score ?? null,
-    minute:    m.event_game_minute || m.minute,
-    status:    m.event_status || m.status || 'Live',
-    tournament:m.league_name || m.tournament || '',
-    isLive:    true,
-  }))
+  // ✅ [Bug Fix] `event_final_result?.split(' - ')` crashed every football
+  // match render when allsportsapi2 returned that field as something other
+  // than a string (e.g. a number, or a plain "0-0" with no spaces) —
+  // optional chaining (`?.`) only guards against null/undefined, NOT
+  // against wrong types, so `.split` on a non-string threw a TypeError
+  // that took down the entire score grid (all matches share one render
+  // pass). Now we explicitly check the type before calling .split(), and
+  // fall back gracefully for any other shape.
+  return matches.map(m => {
+    let homeFromResult = null
+    let awayFromResult = null
+    if (typeof m.event_final_result === 'string' && m.event_final_result.includes('-')) {
+      const parts = m.event_final_result.split('-').map(p => p.trim())
+      homeFromResult = parts[0] || null
+      awayFromResult = parts[1] || null
+    }
+    return {
+      id:        m.event_key       || m.id,
+      homeTeam:  m.event_home_team || m.homeTeam || m.home?.name,
+      awayTeam:  m.event_away_team || m.awayTeam || m.away?.name,
+      homeScore: homeFromResult ?? m.homeScore ?? m.home?.score ?? null,
+      awayScore: awayFromResult ?? m.awayScore ?? m.away?.score ?? null,
+      minute:    m.event_game_minute || m.minute,
+      status:    m.event_status || m.status || 'Live',
+      tournament:m.league_name || m.tournament || '',
+      isLive:    true,
+    }
+  })
 }
 
 function parseScore(m) {
