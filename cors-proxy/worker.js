@@ -180,7 +180,7 @@ function corsHeaders(origin) {
 // hit the exact CORS wall this worker exists to work around. This is
 // why "some" streams appeared to work (self-hosted / already-CORS-open
 // origins) while real third-party CDNs silently failed to play.
-function rewriteManifest(manifestText, targetUrl, workerOrigin) {
+function rewriteManifest(manifestText, targetUrl, workerOrigin, noRef) {
   let baseUrl
   try {
     baseUrl = new URL(targetUrl)
@@ -195,7 +195,8 @@ function rewriteManifest(manifestText, targetUrl, workerOrigin) {
     } catch {
       return rawUri   // malformed URI — leave untouched rather than break playback
     }
-    return `${workerOrigin}/?url=${encodeURIComponent(absolute)}`
+    const suffix = noRef ? '&noref=1' : ''
+    return `${workerOrigin}/?url=${encodeURIComponent(absolute)}${suffix}`
   }
 
   const lines = manifestText.split(/\r?\n/)
@@ -283,11 +284,23 @@ export default {
     // ── Upstream fetch ────────────────────────────────
     try {
       // Forward Range header for video seeking
+      // ✅ [Fix] Real Chrome UA instead of a self-identifying proxy UA —
+      // some anti-bot/anti-hotlink WAFs (Nimble Streamer etc.) block
+      // requests that don't look like an ordinary browser.
       const upstreamHeaders = {
-        'User-Agent': 'Mozilla/5.0 (compatible; StreamVexProxy/1.0; +https://streamvex-live.vercel.app)',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
         'Accept':     '*/*',
-        'Origin':     parsedTarget.origin,
-        'Referer':    parsedTarget.origin + '/',
+      }
+
+      // ✅ [Fix] ?noref=1 — skip Origin/Referer entirely for origins that
+      // block *any* spoofed referer (common on session/token-based CDNs).
+      // Opening a stream URL directly in a browser's address bar sends no
+      // Referer at all — this mode matches that exact behaviour.
+      // Default (no ?noref=) keeps the old spoofed-referer behaviour,
+      // since some other origins actually require it to allow access.
+      if (url.searchParams.get('noref') !== '1') {
+        upstreamHeaders['Origin']  = parsedTarget.origin
+        upstreamHeaders['Referer'] = parsedTarget.origin + '/'
       }
 
       // Range header passthrough — video player seeking এর জন্য দরকার
@@ -373,7 +386,7 @@ export default {
       // (HEAD requests have no body to rewrite — passthrough as-is.)
       if (isManifest && method === 'GET') {
         const manifestText = await upstreamResponse.text()
-        const rewritten     = rewriteManifest(manifestText, decodedUrl, url.origin)
+        const rewritten     = rewriteManifest(manifestText, decodedUrl, url.origin, url.searchParams.get('noref') === '1')
 
         // Body size changed — let the platform recompute Content-Length
         responseHeaders.delete('Content-Length')

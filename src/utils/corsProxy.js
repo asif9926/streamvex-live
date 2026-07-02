@@ -1,6 +1,6 @@
 // corsProxy.js — HLS stream URL → Cloudflare Worker CORS proxy helper
 // Blueprint: src/utils/corsProxy.js
-// Used by: VideoPlayer.jsx
+// Used by: VideoPlayer.jsx, useHLS.js
 //
 // কিভাবে কাজ করে:
 //   Third-party .m3u8 URL → Worker এ পাঠানো হয় → Worker CORS header দিয়ে stream serve করে
@@ -32,7 +32,7 @@ export const SKIP_PROXY =
  * const url = proxyUrl('https://cdn.example.com/live/stream.m3u8')
  * // → 'https://your-worker.workers.dev/?url=https%3A%2F%2Fcdn.example.com%2F...'
  */
-export function proxyUrl(originalUrl) {
+export function proxyUrl(originalUrl, options = {}) {
   if (!originalUrl) return ''
 
   // Same-origin stream — proxy দরকার নেই
@@ -54,7 +54,12 @@ export function proxyUrl(originalUrl) {
     return originalUrl
   }
 
-  return `${WORKER_BASE}/?url=${encodeURIComponent(originalUrl)}`
+  // ✅ [Fix] noReferer — কিছু origin (session/token-based CDN, e.g. Nimble
+  // Streamer) স্পুফ করা Referer/Origin header দেখলেই 403 দেয়, যেহেতু সরাসরি
+  // ব্রাউজারে খুললে কোনো Referer পাঠানো হয় না। channels.json-এ per-channel
+  // "skipReferer": true দিলে এই mode চালু হয়।
+  const suffix = options.noReferer ? '&noref=1' : ''
+  return `${WORKER_BASE}/?url=${encodeURIComponent(originalUrl)}${suffix}`
 }
 
 /**
@@ -70,9 +75,9 @@ export function isProxied(url) {
  * resolveStreamUrl — VideoPlayer এ use করার জন্য main helper
  * SKIP_PROXY + isProxied + proxyUrl সব handle করে
  */
-export function resolveStreamUrl(url) {
+export function resolveStreamUrl(url, options = {}) {
   if (!url) return ''
   if (SKIP_PROXY) return url
   if (isProxied(url)) return url
-  return proxyUrl(url)
+  return proxyUrl(url, options)
 }

@@ -14,14 +14,14 @@ function formatTime(s) {
   return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
-function resolveUrl(url) {
+function resolveUrl(url, skipReferer) {
   if (!url) return ''
   if (SKIP_PROXY) return url
-  return proxyUrl(url)
+  return proxyUrl(url, { noReferer: skipReferer })
 }
 
 // ── Inner player (wrapped below) ────────────────────────
-function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
+function VideoPlayerInner({ streamUrl, backupUrl, title = '', skipReferer = false }) {
   const videoRef     = useRef(null)
   const hlsRef       = useRef(null)
   const containerRef = useRef(null)
@@ -52,8 +52,8 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
     setError(null)
     setBuffering(true)
 
-    const url            = resolveUrl(rawUrl)
-    const backupResolved = backupUrl ? resolveUrl(backupUrl) : null
+    const url            = resolveUrl(rawUrl, skipReferer)
+    const backupResolved = backupUrl ? resolveUrl(backupUrl, skipReferer) : null
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -133,7 +133,7 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
     } else {
       setError('Your browser does not support HLS streaming.')
     }
-  }, [backupUrl])
+  }, [backupUrl, skipReferer])
 
   useEffect(() => {
     if (streamUrl) { retriesRef.current = 0; mediaRetriesRef.current = 0; initHls(streamUrl) }
