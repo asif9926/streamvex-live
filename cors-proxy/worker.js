@@ -68,6 +68,7 @@ const DEFAULT_ALLOWED_DOMAINS = [
   'online24.pm',          // ✅ [Fix] beIN Sports 1 backup
   'hopto.org',            // ✅ [Fix] Sky Sports Cricket (atc.hopto.org)
   'ercdn.net',            // ✅ [Fix] A Sports (turknet.ercdn.net)
+  'thebosstv.com',        // ✅ [Fix] Somoy TV (live.thebosstv.com)
 
   // ── Generic CDN patterns ──
   // যেকোনো .live, .stream domain থেকে m3u8 allow করতে নিচের
