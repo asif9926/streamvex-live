@@ -110,8 +110,22 @@ export default async function handler(req, res) {
 function toText(val, fallback = '') {
   if (val === null || val === undefined) return fallback
   if (typeof val === 'string' || typeof val === 'number') return String(val)
-  if (typeof val === 'object') return val.name ?? val.text ?? val.value ?? val.title ?? fallback
+  if (typeof val === 'object') return val.name ?? val.text ?? val.value ?? val.title ?? val.description ?? fallback
   return fallback
+}
+
+// ✅ [Bug Fix] Football scores were showing blank for EVERY live match.
+// toText() only knows how to pull a *name*-shaped field (.name/.text/...)
+// out of an object — but allsportsapi2's actual score field comes back as
+// a SofaScore-style object like { current: 2, display: 2, period1: 1,
+// period2: 1 }, which has none of those keys. Team names/tournament
+// still worked because THOSE objects genuinely have a `.name` field —
+// only the score shape is different, so it needs its own extractor.
+function scoreValue(val) {
+  if (val === null || val === undefined) return null
+  if (typeof val === 'number' || typeof val === 'string') return val
+  if (typeof val === 'object') return val.current ?? val.display ?? val.total ?? val.value ?? null
+  return null
 }
 
 // ── Normalize different API response shapes ───────────
@@ -167,8 +181,8 @@ function normalizeMatches(raw, sport) {
       id:        m.event_key       || m.id,
       homeTeam:  toText(m.event_home_team || m.homeTeam || m.home?.name, 'Home'),
       awayTeam:  toText(m.event_away_team || m.awayTeam || m.away?.name, 'Away'),
-      homeScore: homeFromResult ?? toText(m.homeScore ?? m.home?.score, null) ?? null,
-      awayScore: awayFromResult ?? toText(m.awayScore ?? m.away?.score, null) ?? null,
+      homeScore: homeFromResult ?? scoreValue(m.homeScore ?? m.home?.score),
+      awayScore: awayFromResult ?? scoreValue(m.awayScore ?? m.away?.score),
       minute:    toText(m.event_game_minute || m.minute),
       status:    toText(m.event_status || m.status, 'Live'),
       tournament:toText(m.league_name || m.tournament, ''),
