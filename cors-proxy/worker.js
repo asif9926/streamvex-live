@@ -295,15 +295,20 @@ export default {
         upstreamHeaders['Range'] = rangeHeader
       }
 
+      const isManifest = parsedTarget.pathname.endsWith('.m3u8') || parsedTarget.pathname.endsWith('.m3u')
+      const isSegment  = /\.(ts|aac|mp4|m4s|key|bin)$/i.test(parsedTarget.pathname)
+
       const upstreamResponse = await fetch(decodedUrl, {
         method:  method,
         headers: upstreamHeaders,
         // Cloudflare Worker timeout: 30s default
         // Streaming: false — পুরো response নাও তারপর forward করো (m3u8 manifest)
         cf: {
-          // Cloudflare cache — m3u8 manifest 5s cache করো, .ts segment এড়াও
-          cacheTtl:            parsedTarget.pathname.endsWith('.m3u8') ? 5 : 0,
-          cacheEverything:     parsedTarget.pathname.endsWith('.m3u8'),
+          // ✅ [Perf Fix] manifest কম সময় cache (live edge freshness),
+          // কিন্তু segment/.ts ফাইল বেশি সময় cache করো — একবার publish হলে বদলায় না,
+          // আর একাধিক viewer একই channel দেখলে origin এ বারবার trip লাগবে না
+          cacheTtl:        isManifest ? 4 : (isSegment ? 60 : 0),
+          cacheEverything: isManifest || isSegment,
         },
       })
 
@@ -351,7 +356,6 @@ export default {
       }
 
       // Cache-Control for manifest vs segment
-      const isManifest = parsedTarget.pathname.endsWith('.m3u8') || parsedTarget.pathname.endsWith('.m3u')
       if (isManifest) {
         // Live manifest — always fresh
         responseHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate')

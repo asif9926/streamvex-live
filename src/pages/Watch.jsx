@@ -136,12 +136,18 @@ export default function Watch() {
 
             <motion.div
               initial={{ opacity: 0, scale: 0.99 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3 }}
+              // ✅ [Bug Fix] opacity is now driven ONLY through this `animate` prop.
+              // Previously a Tailwind `opacity-0` class was applied via `className`
+              // while this prop kept a hardcoded `opacity: 1` — Framer Motion writes
+              // opacity as an inline style, which always wins over a CSS class, so
+              // the X (dismiss) button visually did nothing even though it *was*
+              // correctly flipping `miniHidden` and disabling pointer-events.
+              animate={{ opacity: isMini && miniHidden ? 0 : 1, scale: 1 }}
+              transition={{ duration: 0.25 }}
               className={
                 isMini
-                  ? `fixed bottom-5 right-4 z-[999] w-72 sm:w-80 shadow-2xl shadow-black/60 rounded-xl overflow-hidden border border-white/10 transition-opacity duration-200 ${
-                      miniHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                  ? `fixed bottom-5 right-4 z-[999] w-72 sm:w-80 shadow-2xl shadow-black/60 rounded-xl overflow-hidden border border-white/10 ${
+                      miniHidden ? 'pointer-events-none' : ''
                     }`
                   : ''
               }
@@ -288,7 +294,7 @@ function InfoTab({ channel, isSports }) {
 // ✅ [Fix] useUpcoming hook আলাদাভাবে call করা হয়েছে — useTournamentMatches এ .upcoming নেই
 function CricketMatchesTab() {
   const { results,  loading: rLoading } = useTournamentMatches('cricket')
-  const { upcoming, loading: uLoading } = useUpcoming('cricket', { limit: 4 })
+  const { upcoming, loading: uLoading } = useUpcoming('cricket', { limit: 5 })
   const loading = rLoading || uLoading
 
   if (loading) return (
@@ -304,7 +310,7 @@ function CricketMatchesTab() {
       <Section label="✅ Recent Results" linkTo="/tournament">
         {results.length > 0 ? (
           <div className="flex flex-col gap-3">
-            {results.slice(0, 4).map((m, i) => <CricketMatchRow key={m.id ?? i} match={m} isLive={false} />)}
+            {results.slice(0, 2).map((m, i) => <CricketMatchRow key={m.id ?? i} match={m} isLive={false} />)}
           </div>
         ) : (
           <p className="text-white/30 text-sm py-6 text-center">No recent results available</p>
@@ -325,7 +331,7 @@ function CricketMatchesTab() {
 // ✅ [Fix] same fix — useUpcoming separately
 function FootballMatchesTab() {
   const { results,  loading: rLoading } = useTournamentMatches('football')
-  const { upcoming, loading: uLoading } = useUpcoming('football', { limit: 4 })
+  const { upcoming, loading: uLoading } = useUpcoming('football', { limit: 5 })
   const loading = rLoading || uLoading
 
   if (loading) return (
@@ -341,7 +347,7 @@ function FootballMatchesTab() {
       <Section label="✅ Recent Results" linkTo="/tournament">
         {results.length > 0 ? (
           <div className="flex flex-col gap-3">
-            {results.slice(0, 4).map((m, i) => <FootballMatchRow key={m.id ?? i} match={m} isLive={false} />)}
+            {results.slice(0, 2).map((m, i) => <FootballMatchRow key={m.id ?? i} match={m} isLive={false} />)}
           </div>
         ) : (
           <p className="text-white/30 text-sm py-6 text-center">No recent results available</p>

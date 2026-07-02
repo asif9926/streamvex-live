@@ -63,9 +63,21 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
         maxBufferLength:             30,
         liveSyncDurationCount:       3,
         liveMaxLatencyDurationCount: 10,
-        fragLoadingTimeOut:          20000,
-        manifestLoadingTimeOut:      15000,
-        levelLoadingTimeOut:         15000,
+        fragLoadingTimeOut:          12000,  // ✅ [Perf] was 20000 — faster stall detection
+        manifestLoadingTimeOut:      8000,   // ✅ [Perf] was 15000
+        levelLoadingTimeOut:         8000,   // ✅ [Perf] was 15000
+
+        // ✅ [UX Fix] Conservative ABR — start lower, ramp up only when the
+        // network proves it can sustain higher quality. Prevents the
+        // "starts on best quality, stalls every few seconds" pattern
+        // that's especially common on mobile data.
+        startLevel:                  -1,     // let hls.js auto-pick a safe starting level from bandwidth estimate
+        capLevelToPlayerSize:        true,   // never fetch a resolution bigger than the actual video element
+        abrEwmaFastLive:             3,      // react to bandwidth *drops* quickly (default 3 — kept explicit)
+        abrEwmaSlowLive:             9,      // but only commit to a bandwidth *increase* after it holds up (default 9)
+        abrBandWidthFactor:          0.9,    // pick a level using only 90% of estimated bandwidth — safety margin
+        abrBandWidthUpFactor:        0.7,    // be extra conservative before stepping *up* a level
+        maxStarvationDelay:          2,      // if buffer is starving, drop a level fast instead of waiting
       })
       hlsRef.current = hls
       hls.loadSource(url)
@@ -83,7 +95,7 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '' }) {
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           if (retriesRef.current < 3) {
             retriesRef.current++
-            setTimeout(() => hls.startLoad(), 2000)
+            setTimeout(() => hls.startLoad(), 800)  // ✅ [Perf] was 2000ms
           } else if (backupResolved && url !== backupResolved) {
             retriesRef.current = 0; initHls(backupUrl)
           } else {
