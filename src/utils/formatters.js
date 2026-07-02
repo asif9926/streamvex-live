@@ -3,6 +3,36 @@
 // Used by: tournament components, score cards, player, pages
 
 // ─────────────────────────────────────────────────────
+// SAFETY
+// ─────────────────────────────────────────────────────
+
+/**
+ * safeText — guarantees a renderable string, never an object.
+ *
+ * ✅ [Bug Fix] React throws a hard crash ("Objects are not valid as a
+ * React child") if a raw object ever ends up in JSX like `{match.homeTeam}`.
+ * Third-party sports APIs are inconsistent — the same-looking field can be
+ * a plain string on one provider and a nested object (e.g. `{ name, logo }`)
+ * on another, and that shape can also change without notice. Every field
+ * that gets rendered as text from external API data should be passed
+ * through this first, so a schema drift degrades to a blank/"—" value
+ * instead of crashing the whole component.
+ *
+ * @param {*} val
+ * @param {string} fallback
+ * @returns {string}
+ */
+export function safeText(val, fallback = '') {
+  if (val === null || val === undefined) return fallback
+  if (typeof val === 'string' || typeof val === 'number') return String(val)
+  if (typeof val === 'object') {
+    // common nested shapes: { name }, { text }, { value }, { title }
+    return val.name ?? val.text ?? val.value ?? val.title ?? fallback
+  }
+  return fallback
+}
+
+// ─────────────────────────────────────────────────────
 // DATE / TIME
 // ─────────────────────────────────────────────────────
 

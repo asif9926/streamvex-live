@@ -63,6 +63,11 @@ const DEFAULT_ALLOWED_DOMAINS = [
   'gpcdn.net',   // ✅ [Audit Fix] used by BD channel data (src/data/bdChannels.json)
   '103.114.11.37',  // for t-sports
   '114.130.57.233',
+  '84.17.50.102',         // ✅ [Fix] Fox Sports raw-IP CDN
+  'streamhostingcdn.top', // ✅ [Fix] beIN Sports 1
+  'online24.pm',          // ✅ [Fix] beIN Sports 1 backup
+  'hopto.org',            // ✅ [Fix] Sky Sports Cricket (atc.hopto.org)
+  'ercdn.net',            // ✅ [Fix] A Sports (turknet.ercdn.net)
 
   // ── Generic CDN patterns ──
   // যেকোনো .live, .stream domain থেকে m3u8 allow করতে নিচের

@@ -38,6 +38,7 @@ const BangladeshiTV  = lazy(() => import('./pages/BangladeshiTV.jsx'))
 const LiveScore       = lazy(() => import('./pages/LiveScore.jsx'))
 const Tournament       = lazy(() => import('./pages/Tournament.jsx'))
 const Favorites          = lazy(() => import('./pages/Favorites.jsx'))
+const About                = lazy(() => import('./pages/About.jsx'))
 const Watch                = lazy(() => import('./pages/Watch.jsx'))
 const NotFound                = lazy(() => import('./pages/NotFound.jsx'))
 
@@ -89,6 +90,7 @@ export default function App() {
                 <Route path="/live-score"    element={<LiveScore />} />
                 <Route path="/tournament"    element={<Tournament />} />
                 <Route path="/favorites"     element={<Favorites />} />
+                <Route path="/about"         element={<About />} />
                 <Route path="*"              element={<NotFound />} />
               </Routes>
             </AnimatePresence>

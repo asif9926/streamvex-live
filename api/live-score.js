@@ -25,7 +25,7 @@ const EDGE_CACHE = 's-maxage=90, stale-while-revalidate=120'
 
 export default async function handler(req, res) {
   // CORS — same origin only (Vercel rewrite করে)
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
   res.setHeader('Vary', 'Origin')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -102,6 +102,18 @@ export default async function handler(req, res) {
   }
 }
 
+// ✅ [Bug Fix] Same object-as-string protection as client-side safeText() —
+// applied here too so the raw value stored in the KV cache is always a
+// plain string, not a nested object. Kept as a small self-contained
+// helper (rather than importing from src/utils/) since api/*.js files are
+// bundled independently as their own Vercel Functions.
+function toText(val, fallback = '') {
+  if (val === null || val === undefined) return fallback
+  if (typeof val === 'string' || typeof val === 'number') return String(val)
+  if (typeof val === 'object') return val.name ?? val.text ?? val.value ?? val.title ?? fallback
+  return fallback
+}
+
 // ── Normalize different API response shapes ───────────
 // ✅ [Fix] cricket-live-line1 আসলে { data: [...] } shape এ দেয়
 function normalizeMatches(raw, sport) {
@@ -115,15 +127,15 @@ function normalizeMatches(raw, sport) {
   if (sport === 'cricket') {
     return matches.map(m => ({
       id:        m.match_id  || m.id,
-      name:      m.title     || m.name || `${m.team_a || 'Team 1'} vs ${m.team_b || 'Team 2'}`,
-      teams:     [m.team_a || 'Team 1', m.team_b || 'Team 2'],
+      name:      m.title     || m.name || `${toText(m.team_a, 'Team 1')} vs ${toText(m.team_b, 'Team 2')}`,
+      teams:     [toText(m.team_a, 'Team 1'), toText(m.team_b, 'Team 2')],
       score:     parseScore(m),
-      status:    m.need_run_ball || m.toss || m.match_status || m.status || 'Match info unavailable',
-      matchType: m.series || m.match_type || m.type || 'Match',
+      status:    toText(m.need_run_ball || m.toss || m.match_status || m.status, 'Match info unavailable'),
+      matchType: toText(m.series || m.match_type || m.type, 'Match'),
       format:    detectFormat(m.match_type || m.title || m.series || ''),
       isLive:    true,
-      venue:     m.venue || '',
-      series:    m.series || m.series_name || '',
+      venue:     toText(m.venue),
+      series:    toText(m.series || m.series_name),
     }))
   }
 
@@ -136,6 +148,13 @@ function normalizeMatches(raw, sport) {
   // that took down the entire score grid (all matches share one render
   // pass). Now we explicitly check the type before calling .split(), and
   // fall back gracefully for any other shape.
+  //
+  // ✅ [Bug Fix — root cause of the "every football card crashes" issue]
+  // homeTeam/awayTeam/tournament/status are now passed through toText()
+  // so they're guaranteed plain strings before they ever reach the React
+  // component — allsportsapi2 sometimes nests these as objects
+  // (e.g. `{ name: '...' }`) instead of flat strings, which crashes React
+  // if rendered directly.
   return matches.map(m => {
     let homeFromResult = null
     let awayFromResult = null
@@ -146,13 +165,13 @@ function normalizeMatches(raw, sport) {
     }
     return {
       id:        m.event_key       || m.id,
-      homeTeam:  m.event_home_team || m.homeTeam || m.home?.name,
-      awayTeam:  m.event_away_team || m.awayTeam || m.away?.name,
-      homeScore: homeFromResult ?? m.homeScore ?? m.home?.score ?? null,
-      awayScore: awayFromResult ?? m.awayScore ?? m.away?.score ?? null,
-      minute:    m.event_game_minute || m.minute,
-      status:    m.event_status || m.status || 'Live',
-      tournament:m.league_name || m.tournament || '',
+      homeTeam:  toText(m.event_home_team || m.homeTeam || m.home?.name, 'Home'),
+      awayTeam:  toText(m.event_away_team || m.awayTeam || m.away?.name, 'Away'),
+      homeScore: homeFromResult ?? toText(m.homeScore ?? m.home?.score, null) ?? null,
+      awayScore: awayFromResult ?? toText(m.awayScore ?? m.away?.score, null) ?? null,
+      minute:    toText(m.event_game_minute || m.minute),
+      status:    toText(m.event_status || m.status, 'Live'),
+      tournament:toText(m.league_name || m.tournament, ''),
       isLive:    true,
     }
   })

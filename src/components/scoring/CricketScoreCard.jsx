@@ -1,6 +1,7 @@
 // CricketScoreCard.jsx — [Update #3] ErrorBoundary wrap + [Update #4] Teko/font-sports numbers
 
 import ErrorBoundary from '../ui/ErrorBoundary.jsx'
+import { safeText }  from '../../utils/formatters.js'
 
 // ✅ [Bug Fix] Previously this manually did `${s1.r}/${s1.w}`, which
 // rendered "203-7/undefined" whenever the API's wicket field (`w`) was
@@ -17,7 +18,13 @@ function formatRuns(s) {
 function CricketScoreCardInner({ match }) {
   if (!match) return null
 
-  const [t1, t2] = match.teams || ['Team 1', 'Team 2']
+  // ✅ [Bug Fix — defense-in-depth] Same object-as-child protection as
+  // FootballScoreCard — guards against any future upstream schema drift
+  // that nests team/status/matchType fields as objects instead of strings.
+  const t1 = safeText(match.teams?.[0], 'Team 1')
+  const t2 = safeText(match.teams?.[1], 'Team 2')
+  const matchType = safeText(match.matchType || match.series, 'Cricket')
+  const status = safeText(match.status)
   const s1 = match.score?.[0]
   const s2 = match.score?.[1]
   const score1 = formatRuns(s1)
@@ -30,7 +37,7 @@ function CricketScoreCardInner({ match }) {
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-bold text-white/40 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full truncate max-w-[60%]">
-          {match.matchType || match.series || 'Cricket'}
+          {matchType}
         </span>
         {match.isLive ? (
           <span className="flex items-center gap-1 bg-brand-red/10 border border-brand-red/25 text-brand-red text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0">
@@ -64,11 +71,11 @@ function CricketScoreCardInner({ match }) {
       </div>
 
       {/* Status */}
-      {match.status && (
+      {status && (
         <div className="pt-3 border-t border-brand-border">
           <p className={`text-[11px] text-center font-medium truncate leading-snug
             ${match.isLive ? 'text-green-400/80' : 'text-white/35'}`}>
-            {match.status}
+            {status}
           </p>
         </div>
       )}
