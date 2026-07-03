@@ -1,14 +1,13 @@
 // api/match-results.js — Completed cricket results + Football fixtures/schedule
 // Blueprint: RapidAPI → Vercel KV (30-60 min cache)
-// ✅ [Update #1] Edge Cache: s-maxage=3600, stale-while-revalidate=7200
-// ✅ [Bug Fix] Corrected Football Endpoint path to /api/football/matches
-// ✅ [Bug Fix] Corrected Date format to DD-MM-YYYY for AllSportsAPI2
+// ✅ [Bug Fix] Corrected Football Endpoint path to /api/matches
+// ✅ [Bug Fix] Corrected Date format to DD/MM/YYYY
 
 import { kv } from '@vercel/kv'
 
 const CRICKET_RESULTS_API  = 'https://cricket-live-line1.p.rapidapi.com/recentMatches'
-// ✅ [FIX] সঠিক এন্ডপয়েন্ট পাথ
-const FOOTBALL_RESULTS_API = 'https://allsportsapi2.p.rapidapi.com/api/football/matches'
+// ✅ [FIX] সঠিক এন্ডপয়েন্ট পাথ (football শব্দটি হবে না)
+const FOOTBALL_RESULTS_API = 'https://allsportsapi2.p.rapidapi.com/api/matches'
 const CRICKET_HOST         = 'cricket-live-line1.p.rapidapi.com'
 const FOOTBALL_HOST        = 'allsportsapi2.p.rapidapi.com'
 
@@ -68,9 +67,9 @@ export default async function handler(req, res) {
       
     } else {
       // ── Football Logic (With Backtracking for Sparse Fixtures) ──
-      // ✅ [FIX] DD-MM-YYYY ফরম্যাটে ডেট কনভার্ট করার ফাংশন
       const pad = (n) => String(n).padStart(2, '0')
-      const toPath = (d) => `${pad(d.getUTCDate())}-${pad(d.getUTCMonth() + 1)}-${d.getUTCFullYear()}`
+      // ✅ [FIX] DD/MM/YYYY ফরম্যাটে ডেট কনভার্ট করা (স্ল্যাশ ব্যবহার করে)
+      const toPath = (d) => `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`
       
       const headers = {
         'x-rapidapi-key':  process.env.RAPIDAPI_KEY,
