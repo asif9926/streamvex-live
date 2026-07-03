@@ -49,6 +49,50 @@ export default async function handler(req, res) {
   const bypassCache = req.query.nocache === '1' || req.query.nocache === 'true'
   const cacheHeader = bypassCache ? 'no-store' : EDGE_CACHE   // ✅ don't let a diagnostic call get cached either
 
+  // ✅ [Debug aid] ?probe=1 (football only) tries several plausible
+  // endpoint URL patterns in parallel and reports status + response shape
+  // for each — so instead of guessing one endpoint per deploy-and-test
+  // cycle, we get several data points from a single request:
+  // /api/match-results?sport=football&probe=1
+  if (req.query.probe === '1' && sport === 'football') {
+    if (!process.env.RAPIDAPI_KEY) {
+      return res.status(503).json({ error: 'RAPIDAPI_KEY not configured' })
+    }
+    const d = new Date()
+    const day = d.getUTCDate(), month = d.getUTCMonth() + 1, year = d.getUTCFullYear()
+    const pad = (n) => String(n).padStart(2, '0')
+    const headers = { 'x-rapidapi-key': process.env.RAPIDAPI_KEY, 'x-rapidapi-host': FOOTBALL_HOST }
+    const base = 'https://allsportsapi2.p.rapidapi.com'
+    const candidates = [
+      { label: 'matches/d/m/y',          url: `${base}/api/matches/${day}/${month}/${year}` },
+      { label: 'matches/dd/mm/y',        url: `${base}/api/matches/${pad(day)}/${pad(month)}/${year}` },
+      { label: 'scheduled-events/d/m/y', url: `${base}/api/scheduled-events/${day}/${month}/${year}` },
+      { label: 'events/d/m/y',           url: `${base}/api/events/${day}/${month}/${year}` },
+      { label: 'matches/date-iso',       url: `${base}/api/matches/${year}-${pad(month)}-${pad(day)}` },
+      { label: 'matches/live (control)', url: `${base}/api/matches/live` },
+    ]
+    const results = await Promise.all(candidates.map(async (c) => {
+      try {
+        const r    = await fetch(c.url, { headers, signal: AbortSignal.timeout(8000) })
+        const text = await r.text()
+        let json = null, parseError = null
+        try { json = JSON.parse(text) } catch (e) { parseError = e.message }
+        return {
+          label:  c.label,
+          url:    c.url,
+          status: r.status,
+          topLevelKeys: json && typeof json === 'object' ? Object.keys(json) : null,
+          isArray: Array.isArray(json),
+          arrayLength: Array.isArray(json) ? json.length : (Array.isArray(json?.events) ? json.events.length : null),
+          bodyPreview: text.slice(0, 300),
+        }
+      } catch (e) {
+        return { label: c.label, url: c.url, error: e.message }
+      }
+    }))
+    return res.status(200).json({ probe: true, results })
+  }
+
   const cacheKey = `match-results:${sport}`
 
   try {
