@@ -6,44 +6,45 @@
     "subcategory": "Football",
     "sport": "football",
     "logo": "https://upload.wikimedia.org/wikipedia/commons/d/d4/BeIN_Sports_logo_%28horizontal_version%29.svg",
-    "streamUrl": "http://198.195.239.50:8095/somoyTv/tracks-v1a1/mono.m3u8",
-    "backupUrl": "https://1nyaler.streamhostingcdn.top/stream/23/index.m3u8",
+    "streamUrl": "https://1nyaler.streamhostingcdn.top/stream/23/index.m3u8",
+    "backupUrl": "http://198.195.239.50:8095/somoyTv/tracks-v1a1/mono.m3u8",
     "isLive": true,
-    "isPremium": false,
+    "isPremium": true,
     "currentMatch": "Fifa World Cup 2026 - Live",
     "language": "English"
   },
 
   {
     "id": 2,
-    "name": "T-Sports",
+    "name": "TVP Sports",
     "category": "Sports",
     "subcategory": "Football",
     "sport": "football",
-    "logo": "https://upload.wikimedia.org/wikipedia/commons/4/4c/T_Sports_logo.svg",
-    "streamUrl": "http://198.195.239.50:8095/tsports/tracks-v1a1/mono.m3u8",
+    "logo": "https://upload.wikimedia.org/wikipedia/commons/d/d7/Logo_TVP_Sport.jpg",
+    "streamUrl": "https://1nyaler.streamhostingcdn.top/stream/89/index.m3u8",
     "backupUrl": "http://114.130.57.233:8080/T-Sports/tracks-v1a1/mono.m3u8?token=SkQuhAXZxgBan1",
     "isLive": true,
     "isPremium": true,
     "currentMatch": "Fifa World Cup 2026 - Live",
-    "language": "English/Bangla",
-    "skipReferer": true
+    "language": "English/Bangla"
   },
 
   {
     "id": 3,
-    "name": "Fox Sports",
+    "name": "616 4K Sports",
     "category": "Sports",
     "subcategory": "Football",
     "sport": "football",
-    "logo": "https://upload.wikimedia.org/wikipedia/commons/e/ee/Fox_Sports_wordmark_logo.svg",
-    "streamUrl": "http://84.17.50.102/fox/index.m3u8",
-    "backupUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "logo": "https://images.now-tv.com/shares/channelPreview/img/en_hk/color/ch616_170_122",
+    "streamUrl": "http://103.114.11.37:8081/FIFAPLUS/index.m3u8?token=bJPpluZ30rPLH3",
+    "backupUrl": "http://103.114.11.37:8081/FIFA4k-2/index.m3u8?token=bJPpluZ30rPLH3",
+    "skipReferer": true,
     "isLive": true,
-    "isPremium": false,
+    "isPremium": true,
     "currentMatch": "Fifa World Cup 2026 - Live",
     "language": "English"
   },
+  
   {
     "id": 4,
     "name": "Sky Sports Cricket",
