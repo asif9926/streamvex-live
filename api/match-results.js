@@ -30,7 +30,7 @@ const CACHE_TTL  = 3600  // 1 hour KV TTL
 const EDGE_CACHE = 's-maxage=3600, stale-while-revalidate=7200'  // ✅ [Update #1]
 
 export default async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
   res.setHeader('Access-Control-Allow-Origin',  allowedOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Vary', 'Origin')
@@ -114,12 +114,34 @@ export default async function handler(req, res) {
         ])
         const todayItems     = extractItems(todayJson)
         const yesterdayItems = extractItems(yesterdayJson)
-        const merged  = [...todayItems, ...yesterdayItems]
-        const data    = normalizeResults(merged, sport, /* alreadyExtracted */ true)
+        const merged        = [...todayItems, ...yesterdayItems]
+        const beforeFilterN = merged.length
+        const data          = normalizeResults(merged, sport, /* alreadyExtracted */ true)
 
         await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
         res.setHeader('Cache-Control', cacheHeader)
-        return res.status(200).json({ source: 'api', data })
+
+        // ✅ [Debug aid] With ?nocache=1, attach a _debug block showing
+        // exactly what came back at each stage — response status, top-level
+        // JSON keys, item counts before/after the finished-only filter, and
+        // a raw sample item. This replaces further blind guessing: whatever
+        // the real cause is (wrong envelope key vs. filter dropping
+        // everything vs. genuinely zero matches), it'll be visible here.
+        const payload = { source: 'api', data }
+        if (bypassCache) {
+          payload._debug = {
+            todayStatus:      todayRes.status,
+            yesterdayStatus:  yesterdayRes.status,
+            todayUrl:         todayRes.url,
+            yesterdayUrl:     yesterdayRes.url,
+            todayTopLevelKeys:     todayJson && typeof todayJson === 'object' ? Object.keys(todayJson) : typeof todayJson,
+            yesterdayTopLevelKeys: yesterdayJson && typeof yesterdayJson === 'object' ? Object.keys(yesterdayJson) : typeof yesterdayJson,
+            rawItemCount:      beforeFilterN,
+            afterFilterCount:  data.length,
+            sampleRawItem:     merged[0] ?? null,
+          }
+        }
+        return res.status(200).json(payload)
       }
     }
 
