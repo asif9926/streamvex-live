@@ -64,15 +64,45 @@ export default async function handler(req, res) {
         signal: AbortSignal.timeout(10000),
       })
     } else {
-      // ✅ [Fix] football: date param আজকের তারিখ দিয়ে — reference code এর মতোই
-      const today = new Date().toISOString().split('T')[0]
-      response = await fetch(`${fetchUrl}?date=${today}`, {
-        headers: {
-          'x-rapidapi-key':  process.env.RAPIDAPI_KEY,
-          'x-rapidapi-host': host,
-        },
-        signal: AbortSignal.timeout(10000),
-      })
+      // ✅ [Bug Fix] Previously this only queried TODAY's schedule — if no
+      // football match had finished yet today (e.g. early morning, as in
+      // the reported screenshot showing "06:42 AM"), the Results tab had
+      // nothing to show even though yesterday's finished matches existed.
+      // Now we fetch today + yesterday and merge, so "recent results"
+      // actually has something recent to show most of the time.
+      const todayDate     = new Date()
+      const yesterdayDate = new Date(Date.now() - 86400000)
+      const todayStr      = todayDate.toISOString().split('T')[0]
+      const yesterdayStr  = yesterdayDate.toISOString().split('T')[0]
+
+      const headers = {
+        'x-rapidapi-key':  process.env.RAPIDAPI_KEY,
+        'x-rapidapi-host': host,
+      }
+
+      const [todayRes, yesterdayRes] = await Promise.all([
+        fetch(`${fetchUrl}?date=${todayStr}`,     { headers, signal: AbortSignal.timeout(10000) }),
+        fetch(`${fetchUrl}?date=${yesterdayStr}`, { headers, signal: AbortSignal.timeout(10000) }),
+      ])
+
+      // Use whichever succeeded; if both failed, fall through to the
+      // existing !response.ok error-handling path below using todayRes.
+      response = todayRes.ok ? todayRes : (yesterdayRes.ok ? yesterdayRes : todayRes)
+
+      if (todayRes.ok || yesterdayRes.ok) {
+        const [todayJson, yesterdayJson] = await Promise.all([
+          todayRes.ok     ? todayRes.json().catch(() => null)     : Promise.resolve(null),
+          yesterdayRes.ok ? yesterdayRes.json().catch(() => null) : Promise.resolve(null),
+        ])
+        const todayItems     = extractItems(todayJson)
+        const yesterdayItems = extractItems(yesterdayJson)
+        const merged  = [...todayItems, ...yesterdayItems]
+        const data    = normalizeResults(merged, sport, /* alreadyExtracted */ true)
+
+        await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
+        res.setHeader('Cache-Control', EDGE_CACHE)
+        return res.status(200).json({ source: 'api', data })
+      }
     }
 
     if (!response.ok) {
@@ -110,40 +140,99 @@ export default async function handler(req, res) {
   }
 }
 
-function normalizeResults(raw, sport) {
-  let items = []
-  if (Array.isArray(raw))                items = raw
-  else if (Array.isArray(raw?.data))     items = raw.data       // ✅ cricket-live-line1 shape
-  else if (Array.isArray(raw?.results))  items = raw.results
-  else if (Array.isArray(raw?.response)) items = raw.response
-  else if (Array.isArray(raw?.events))   items = raw.events     // ✅ [Fix] allsportsapi2 shape
-  else if (Array.isArray(raw?.matches))  items = raw.matches    // ✅ [Fix] allsportsapi2 alt shape
+// ✅ [Bug Fix] Object-as-string / object-as-number safety — same pattern
+// as api/live-score.js. allsportsapi2's SofaScore-style shape nests team
+// names as { name: '...' } and scores as { current, display, ... }
+// instead of flat strings/numbers; rendering those objects directly in
+// React crashes the component. These guarantee a safe primitive either way.
+function toText(val, fallback = '') {
+  if (val === null || val === undefined) return fallback
+  if (typeof val === 'string' || typeof val === 'number') return String(val)
+  if (typeof val === 'object') return val.name ?? val.text ?? val.value ?? val.title ?? val.description ?? fallback
+  return fallback
+}
+function scoreValue(val) {
+  if (val === null || val === undefined) return null
+  if (typeof val === 'number' || typeof val === 'string') return val
+  if (typeof val === 'object') return val.current ?? val.display ?? val.total ?? val.value ?? null
+  return null
+}
+
+// ✅ [Bug Fix] Extract the events array regardless of envelope shape.
+// A "schedule" endpoint from this API family sometimes groups events by
+// tournament (`{ tournaments: [{ events: [...] }] }`) instead of a flat
+// top-level array — the earlier version only checked flat shapes, so a
+// grouped response silently produced zero items.
+function extractItems(raw) {
+  if (!raw) return []
+  if (Array.isArray(raw))                return raw
+  if (Array.isArray(raw?.data))          return raw.data
+  if (Array.isArray(raw?.results))       return raw.results
+  if (Array.isArray(raw?.response))      return raw.response
+  if (Array.isArray(raw?.events))        return raw.events
+  if (Array.isArray(raw?.matches))       return raw.matches
+  if (Array.isArray(raw?.tournaments)) {
+    // grouped-by-tournament shape — flatten
+    return raw.tournaments.flatMap(t => t.events || t.matches || [])
+  }
+  return []
+}
+
+function normalizeResults(raw, sport, alreadyExtracted = false) {
+  const items = alreadyExtracted ? raw : extractItems(raw)
 
   if (sport === 'cricket') {
     return items.map(m => ({
       id:        m.match_id  || m.id,
-      name:      m.title     || m.name || `${m.team_a || 'Team 1'} vs ${m.team_b || 'Team 2'}`,
-      teams:     [m.team_a || 'Team 1', m.team_b || 'Team 2'],
+      name:      m.title     || m.name || `${toText(m.team_a, 'Team 1')} vs ${toText(m.team_b, 'Team 2')}`,
+      teams:     [toText(m.team_a, 'Team 1'), toText(m.team_b, 'Team 2')],
       score:     buildCricketScore(m),
-      status:    m.match_status || m.toss || m.need_run_ball || 'Finished',
+      status:    toText(m.match_status || m.toss || m.need_run_ball, 'Finished'),
       format:    detectFormat(m.match_type || m.title || m.series || ''),
-      matchType: m.series || m.match_type || '',
-      venue:     m.venue || '',
+      matchType: toText(m.series || m.match_type, ''),
+      venue:     toText(m.venue),
       date:      m.match_date || m.date || '',
     }))
   }
 
-  return items.map(m => ({
-    id:        m.event_key       || m.id,
-    homeTeam:  m.event_home_team || m.homeTeam || m.home?.name,
-    awayTeam:  m.event_away_team || m.awayTeam || m.away?.name,
-    homeScore: m.event_final_result?.split(' - ')?.[0] ?? m.homeScore ?? null,
-    awayScore: m.event_final_result?.split(' - ')?.[1] ?? m.awayScore ?? null,
-    tournament:m.league_name     || m.tournament || '',
-    status:    m.event_status    || 'FT',
-    date:      m.event_date      || m.date || '',
-    isLive:    false,
-  }))
+  return items
+    .map(m => {
+      let homeFromResult = null
+      let awayFromResult = null
+      if (typeof m.event_final_result === 'string' && m.event_final_result.includes('-')) {
+        const parts = m.event_final_result.split('-').map(p => p.trim())
+        homeFromResult = parts[0] || null
+        awayFromResult = parts[1] || null
+      }
+      return {
+        id:        m.event_key       || m.id,
+        homeTeam:  toText(m.event_home_team || m.homeTeam || m.home?.name, 'Home'),
+        awayTeam:  toText(m.event_away_team || m.awayTeam || m.away?.name, 'Away'),
+        homeScore: homeFromResult ?? scoreValue(m.homeScore ?? m.home?.score),
+        awayScore: awayFromResult ?? scoreValue(m.awayScore ?? m.away?.score),
+        tournament:toText(m.league_name || m.tournament, ''),
+        status:    toText(m.event_status || m.status, 'FT'),
+        date:      m.event_date || m.date || '',
+        isLive:    false,
+        // raw status kept for the finished-only filter below
+        _rawStatus: (typeof m.event_status === 'object' ? m.event_status?.type : m.event_status)
+                    ?? (typeof m.status === 'object' ? m.status?.type : m.status) ?? '',
+      }
+    })
+    // ✅ [Bug Fix] A "schedule" endpoint returns ALL of a day's matches —
+    // scheduled, live, AND finished — mixed together. The Results tab
+    // should only ever show matches that have actually finished;
+    // otherwise scheduled/not-started fixtures show up with blank scores
+    // looking like a bug. Keep anything that doesn't look explicitly
+    // not-started/live (defaults to keeping the match if status is
+    // ambiguous, rather than risking hiding genuine results).
+    .filter(m => {
+      const s = String(m._rawStatus || m.status || '').toLowerCase()
+      const isNotStarted = /not.?started|scheduled|^ns$|^upcoming$/.test(s)
+      const isLiveStatus = /inprogress|live|1st half|2nd half|halftime/.test(s)
+      return !isNotStarted && !isLiveStatus
+    })
+    .map(({ _rawStatus, ...rest }) => rest)
 }
 
 function buildCricketScore(m) {
