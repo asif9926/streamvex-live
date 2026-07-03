@@ -1,18 +1,13 @@
-// api/match-results.js — Completed cricket results + Football fixtures/schedule
-// Blueprint: RapidAPI → Vercel KV (30-60 min cache)
-// ✅ [Update #1] Edge Cache: s-maxage=3600, stale-while-revalidate=7200
-// ✅ [Bug Fix] Corrected Football Endpoint path to /api/matches
-// ✅ [Bug Fix] Corrected Date format to DD/MM/YYYY
-// ✅ [Update #2] Football date logic updated to fetch Today (i=0), Yesterday (i=1), etc.
+// api/match-results.js
+// ✅ Added Debug Mode & URL Auto-Fallback
 
 import { kv } from '@vercel/kv'
 
 const CRICKET_RESULTS_API  = 'https://cricket-live-line1.p.rapidapi.com/recentMatches'
-const FOOTBALL_RESULTS_API = 'https://allsportsapi2.p.rapidapi.com/api/matches'
 const CRICKET_HOST         = 'cricket-live-line1.p.rapidapi.com'
 const FOOTBALL_HOST        = 'allsportsapi2.p.rapidapi.com'
 
-const CACHE_TTL  = 3600  // 1 hour KV TTL
+const CACHE_TTL  = 3600  
 const EDGE_CACHE = 's-maxage=3600, stale-while-revalidate=7200'
 
 export default async function handler(req, res) {
@@ -30,13 +25,13 @@ export default async function handler(req, res) {
   }
 
   const bypassCache = req.query.nocache === '1' || req.query.nocache === 'true'
+  const isDebug     = req.query.debug === '1'
   const cacheHeader = bypassCache ? 'no-store' : EDGE_CACHE
   const cacheKey = `match-results:${sport}`
 
   try {
-    // ── 1. KV Cache Check ───────────────────────────────────
     const cached = bypassCache ? null : await kv.get(cacheKey)
-    if (cached) {
+    if (cached && !isDebug) {
       res.setHeader('Cache-Control', cacheHeader)
       return res.status(200).json({ source: 'cache', data: cached._data || cached })
     }
@@ -45,18 +40,14 @@ export default async function handler(req, res) {
       return res.status(503).json({ error: 'RAPIDAPI_KEY not configured' })
     }
 
-    // ── 2. API Call ───────────────────────────────────
-    const host = sport === 'cricket' ? CRICKET_HOST : FOOTBALL_HOST
-    let fetchUrl = sport === 'cricket' ? CRICKET_RESULTS_API : FOOTBALL_RESULTS_API
     let response
     let data = []
 
     if (sport === 'cricket') {
-      // Cricket er endpoint auto recent matches return kore (Today + Previous days)
-      response = await fetch(fetchUrl, {
+      response = await fetch(CRICKET_RESULTS_API, {
         headers: {
           'x-rapidapi-key':  process.env.RAPIDAPI_KEY,
-          'x-rapidapi-host': host,
+          'x-rapidapi-host': CRICKET_HOST,
           'Content-Type':    'application/json',
         },
         signal: AbortSignal.timeout(10000),
@@ -68,13 +59,10 @@ export default async function handler(req, res) {
       }
       
     } else {
-      // ── Football Logic (With Backtracking for Sparse Fixtures) ──
       const pad = (n) => String(n).padStart(2, '0')
-      const toPath = (d) => `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`
-      
       const headers = {
         'x-rapidapi-key':  process.env.RAPIDAPI_KEY,
-        'x-rapidapi-host': host,
+        'x-rapidapi-host': FOOTBALL_HOST,
       }
       const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
@@ -83,13 +71,21 @@ export default async function handler(req, res) {
       let lastRes    = null
 
       for (let i = 0; i < MAX_DAYS_BACK; i++) {
-        // ✅ [Update] i = 0 (Ajke), i = 1 (Gotokal), i = 2 (Tar ager din)
-        const d   = new Date(Date.now() - (i * 86400000)) 
-        const url = `${fetchUrl}/${toPath(d)}`
+        const d = new Date(Date.now() - (i * 86400000)) 
+        const dateDDMMYYYY = `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`
+        
+        // 1. AllSportsAPI2 Endpoint Format (Path)
+        let url = `https://allsportsapi2.p.rapidapi.com/api/football/matches/${dateDDMMYYYY}`
         
         let r
         try {
           r = await fetch(url, { headers, signal: AbortSignal.timeout(4000) })
+          if(r.status === 404) {
+             // 2. Fallback to Query Parameter if Path fails
+             const dateYYYYMMDD = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+             url = `https://allsportsapi2.p.rapidapi.com/api/football/matches?date=${dateYYYYMMDD}`
+             r = await fetch(url, { headers, signal: AbortSignal.timeout(4000) })
+          }
         } catch {
           continue
         }
@@ -97,15 +93,25 @@ export default async function handler(req, res) {
         lastRes = r
 
         if (r.status === 429) {
-          await sleep(600) // Rate Limit Protection
+          await sleep(600)
           continue
         }
         if (!r.ok) continue
 
         const json  = await r.json().catch(() => null)
+
+        // ✨✨✨ DEBUG MODE (র-ডাটা দেখার জন্য) ✨✨✨
+        if (isDebug) {
+           return res.status(200).json({ 
+             source: 'debug_mode', 
+             attemptedUrl: url, 
+             apiStatus: r.status, 
+             rawData: json 
+           })
+        }
+
         const items = extractItems(json)
         if (items.length) collected = collected.concat(items)
-
         if (collected.length >= 12) break
         await sleep(250) 
       }
@@ -117,7 +123,7 @@ export default async function handler(req, res) {
     }
 
     if (!response || !response.ok) {
-      console.error(`[match-results] RapidAPI Error for ${sport}`)
+      if(isDebug) return res.status(200).json({ source: 'error', status: response?.status })
       const stale = await kv.get(cacheKey).catch(() => null)
       if (stale) {
         res.setHeader('Cache-Control', cacheHeader)
@@ -127,8 +133,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ source: 'error_fallback', data: [], error: 'Failed to fetch' })
     }
 
-    // ── 3. Save to KV Cache ───────────────────────────────────
-    if (data.length > 0) {
+    if (data.length > 0 && !isDebug) {
       await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
     }
 
@@ -136,7 +141,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ source: 'api', data })
 
   } catch (error) {
-    console.error('[match-results] Error:', error.message)
+    if (isDebug) return res.status(200).json({ source: 'catch_error', error: error.message })
     try {
       const stale = await kv.get(cacheKey)
       if (stale) {
