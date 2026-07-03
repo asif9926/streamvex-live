@@ -30,7 +30,7 @@ const CACHE_TTL  = 3600  // 1 hour KV TTL
 const EDGE_CACHE = 's-maxage=3600, stale-while-revalidate=7200'  // ✅ [Update #1]
 
 export default async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
   res.setHeader('Access-Control-Allow-Origin',  allowedOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Vary', 'Origin')
@@ -123,66 +123,76 @@ export default async function handler(req, res) {
         signal: AbortSignal.timeout(10000),
       })
     } else {
-      // ✅ [Bug Fix] Previously this only queried TODAY's schedule — if no
-      // football match had finished yet today (e.g. early morning, as in
-      // the reported screenshot showing "06:42 AM"), the Results tab had
-      // nothing to show even though yesterday's finished matches existed.
-      // Now we fetch today + yesterday and merge, so "recent results"
-      // actually has something recent to show most of the time.
-      // ✅ [Bug Fix] Path-segment date format (day/month/year), not a
-      // ?date= query string — see FOOTBALL_RESULTS_API comment above.
-      const todayDate     = new Date()
-      const yesterdayDate = new Date(Date.now() - 86400000)
+      // ✅ [Bug Fix — v3] Confirmed via probe: `/api/matches/{d}/{m}/{y}`
+      // IS the correct endpoint (200 OK, real array shape) — the earlier
+      // 404s were from wrong paths, now fixed. But firing 2 requests in
+      // parallel (today + yesterday) triggered a 429 "rate limit per
+      // second exceeded" on the RapidAPI Basic plan. Also, July is
+      // off-season for most major leagues (confirmed: /matches/live only
+      // showed "Club Friendly Games"), so a single day is often genuinely
+      // empty — not a bug, just sparse fixtures. Fix: fetch sequentially
+      // (one at a time, never parallel) with a small delay, and look back
+      // up to MAX_DAYS_BACK days, stopping as soon as we find results — this
+      // respects the rate limit AND meaningfully improves the odds of
+      // "recent results" actually having something to show.
       const toPath = (d) => `${d.getUTCDate()}/${d.getUTCMonth() + 1}/${d.getUTCFullYear()}`
-      const todayPath      = toPath(todayDate)
-      const yesterdayPath  = toPath(yesterdayDate)
-
       const headers = {
         'x-rapidapi-key':  process.env.RAPIDAPI_KEY,
         'x-rapidapi-host': host,
       }
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
-      const [todayRes, yesterdayRes] = await Promise.all([
-        fetch(`${fetchUrl}/${todayPath}`,     { headers, signal: AbortSignal.timeout(10000) }),
-        fetch(`${fetchUrl}/${yesterdayPath}`, { headers, signal: AbortSignal.timeout(10000) }),
-      ])
+      const MAX_DAYS_BACK = 3   // keeps worst-case (all timeouts) comfortably under Vercel's 15s function limit
+      let collected  = []
+      let lastRes    = null
+      let daysChecked = []
 
-      // Use whichever succeeded; if both failed, fall through to the
-      // existing !response.ok error-handling path below using todayRes.
-      response = todayRes.ok ? todayRes : (yesterdayRes.ok ? yesterdayRes : todayRes)
+      for (let i = 0; i < MAX_DAYS_BACK; i++) {
+        const d   = new Date(Date.now() - i * 86400000)
+        const url = `${fetchUrl}/${toPath(d)}`
+        let r
+        try {
+          r = await fetch(url, { headers, signal: AbortSignal.timeout(4000) })
+        } catch {
+          continue
+        }
+        lastRes = r
+        daysChecked.push({ url, status: r.status })
 
-      if (todayRes.ok || yesterdayRes.ok) {
-        const [todayJson, yesterdayJson] = await Promise.all([
-          todayRes.ok     ? todayRes.json().catch(() => null)     : Promise.resolve(null),
-          yesterdayRes.ok ? yesterdayRes.json().catch(() => null) : Promise.resolve(null),
-        ])
-        const todayItems     = extractItems(todayJson)
-        const yesterdayItems = extractItems(yesterdayJson)
-        const merged        = [...todayItems, ...yesterdayItems]
-        const beforeFilterN = merged.length
-        const data          = normalizeResults(merged, sport, /* alreadyExtracted */ true)
+        if (r.status === 429) {
+          // Rate limited — back off a bit longer before the next attempt
+          await sleep(600)
+          continue
+        }
+        if (!r.ok) continue
+
+        const json  = await r.json().catch(() => null)
+        const items = extractItems(json)
+        if (items.length) collected = collected.concat(items)
+
+        // Stop early once we have a reasonable amount — saves API quota
+        if (collected.length >= 12) break
+        await sleep(250)   // small gap between sequential calls, stays well under per-second limits
+      }
+
+      response = lastRes
+
+      if (collected.length || (lastRes && lastRes.ok)) {
+        const beforeFilterN = collected.length
+        const data = normalizeResults(collected, sport, /* alreadyExtracted */ true)
 
         await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
         res.setHeader('Cache-Control', cacheHeader)
 
-        // ✅ [Debug aid] With ?nocache=1, attach a _debug block showing
-        // exactly what came back at each stage — response status, top-level
-        // JSON keys, item counts before/after the finished-only filter, and
-        // a raw sample item. This replaces further blind guessing: whatever
-        // the real cause is (wrong envelope key vs. filter dropping
-        // everything vs. genuinely zero matches), it'll be visible here.
+        // ✅ [Debug aid] With ?nocache=1, show exactly how many days were
+        // checked and what each returned — no more guessing blind.
         const payload = { source: 'api', data }
         if (bypassCache) {
           payload._debug = {
-            todayStatus:      todayRes.status,
-            yesterdayStatus:  yesterdayRes.status,
-            todayUrl:         todayRes.url,
-            yesterdayUrl:     yesterdayRes.url,
-            todayTopLevelKeys:     todayJson && typeof todayJson === 'object' ? Object.keys(todayJson) : typeof todayJson,
-            yesterdayTopLevelKeys: yesterdayJson && typeof yesterdayJson === 'object' ? Object.keys(yesterdayJson) : typeof yesterdayJson,
-            rawItemCount:      beforeFilterN,
-            afterFilterCount:  data.length,
-            sampleRawItem:     merged[0] ?? null,
+            daysChecked,
+            rawItemCount:     beforeFilterN,
+            afterFilterCount: data.length,
+            sampleRawItem:    collected[0] ?? null,
           }
         }
         return res.status(200).json(payload)
