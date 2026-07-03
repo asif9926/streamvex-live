@@ -59,6 +59,7 @@ export default async function handler(req, res) {
       }
       
     } else {
+      // ── Football Logic (ANTI-SPAM & RATE LIMIT PROTECTED) ──
       const pad = (n) => String(n).padStart(2, '0')
       const headers = {
         'x-rapidapi-key':  process.env.RAPIDAPI_KEY,
@@ -66,7 +67,8 @@ export default async function handler(req, res) {
       }
       const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
-      const MAX_DAYS_BACK = 3
+      // API limit bachanor jonno 3 er bodole shudhu 2 din (Today & Yesterday) check korbo
+      const MAX_DAYS_BACK = 2 
       let collected  = []
       let lastRes    = null
 
@@ -74,17 +76,15 @@ export default async function handler(req, res) {
         const d = new Date(Date.now() - (i * 86400000)) 
         const dateDDMMYYYY = `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`
         
-        // 1. AllSportsAPI2 Endpoint Format (Path)
         let url = `https://allsportsapi2.p.rapidapi.com/api/football/matches/${dateDDMMYYYY}`
-        
         let r
+        
         try {
-          r = await fetch(url, { headers, signal: AbortSignal.timeout(4000) })
+          r = await fetch(url, { headers, signal: AbortSignal.timeout(5000) })
           if(r.status === 404) {
-             // 2. Fallback to Query Parameter if Path fails
              const dateYYYYMMDD = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
              url = `https://allsportsapi2.p.rapidapi.com/api/football/matches?date=${dateYYYYMMDD}`
-             r = await fetch(url, { headers, signal: AbortSignal.timeout(4000) })
+             r = await fetch(url, { headers, signal: AbortSignal.timeout(5000) })
           }
         } catch {
           continue
@@ -92,16 +92,17 @@ export default async function handler(req, res) {
         
         lastRes = r
 
+        // ✅ [Fix] 429 asle loop break kore dibo jeno api limit block na khay
         if (r.status === 429) {
-          await sleep(600)
-          continue
+           if (isDebug) return res.status(200).json({ source: 'error', status: 429, message: 'RapidAPI limit shesh! Notun key din ba wait korun.' })
+           break 
         }
+        
         if (!r.ok) continue
 
         const json  = await r.json().catch(() => null)
 
-        // ✨✨✨ DEBUG MODE (র-ডাটা দেখার জন্য) ✨✨✨
-        if (isDebug) {
+        if (isDebug && i === 0) {
            return res.status(200).json({ 
              source: 'debug_mode', 
              attemptedUrl: url, 
@@ -112,8 +113,10 @@ export default async function handler(req, res) {
 
         const items = extractItems(json)
         if (items.length) collected = collected.concat(items)
-        if (collected.length >= 12) break
-        await sleep(250) 
+        if (collected.length >= 10) break
+        
+        // ✅ [Anti-Spam] Porer din er data anar aage 1.5 second wait korbe
+        await sleep(1500) 
       }
 
       response = lastRes
