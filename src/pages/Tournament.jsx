@@ -42,7 +42,7 @@ const CONTENT_TABS = [
 export default function Tournament() {
   const [sport,  setSport]  = useState('cricket')
   const [subTab, setSubTab] = useState('series')
-  const [league, setLeague] = useState('CL')
+  const [league] = useState('CL')  // fixed default — used only by football Upcoming tab filter
 
   // Reset subTab when sport changes
   const handleSportChange = (s) => {
@@ -84,26 +84,6 @@ export default function Tournament() {
         className="mb-6"
       />
 
-      {/* Football league selector (visible when football + series) */}
-      {sport === 'football' && subTab === 'series' && (
-        <div className="flex gap-2 flex-wrap mb-5">
-          {FOOTBALL_LEAGUES.map(lg => (
-            <button
-              key={lg.id}
-              onClick={() => setLeague(lg.id)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all
-                ${league === lg.id
-                  ? 'border-brand-red/50 bg-brand-red/10 text-white'
-                  : 'border-brand-border bg-brand-surface text-white/40 hover:text-white hover:border-white/20'
-                }`}
-            >
-              <span>{lg.flag}</span>
-              {lg.name}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Animated content switch */}
       <AnimatePresence mode="wait">
         <motion.div
@@ -118,7 +98,7 @@ export default function Tournament() {
             <CricketSeriesTab />
           )}
           {subTab === 'series' && sport === 'football' && (
-            <FootballSeriesTab league={league} />
+            <FootballSeriesTab />
           )}
 
           {/* ── RESULTS TAB ── */}
@@ -146,30 +126,45 @@ function CricketSeriesTab() {
 }
 
 // ── Football Series Tab ───────────────────────────────
-function FootballSeriesTab({ league }) {
-  const { series, loading, isError } = useSeries('football', { league })
+// ✅ [Update] football-data.org has no single "all leagues" endpoint — it's
+// one competition per request. So each league is shown as its own
+// series-style card (same accordion UI as cricket); clicking one fetches
+// and expands that league's fixtures inline, right under the card.
+function FootballSeriesTab() {
+  // Static list, shaped like SeriesList expects (id, name, flag, group)
+  const leagueSeries = FOOTBALL_LEAGUES
 
-  if (isError) return <ErrorState label="league data" />
+  return (
+    <SeriesList
+      series={leagueSeries}
+      loading={false}
+      renderMatches={(series) => <FootballLeagueMatches league={series.id} />}
+    />
+  )
+}
+
+function FootballLeagueMatches({ league }) {
+  const { series: matches, loading, isError } = useSeries('football', { league })
+
+  if (isError) {
+    return <p className="text-red-400/60 text-sm py-6 text-center">Failed to load fixtures. Please try again later.</p>
+  }
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {[...Array(6)].map((_, i) => <SkeletonCard key={i} className="h-24" />)}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {[...Array(4)].map((_, i) => <SkeletonCard key={i} className="h-24" />)}
       </div>
     )
   }
 
-  if (!series.length) {
-    return (
-      <div className="py-14 text-center border border-dashed border-brand-border rounded-2xl text-white/30 text-sm">
-        No fixtures found for this league.
-      </div>
-    )
+  if (!matches.length) {
+    return <p className="text-white/40 text-sm py-6 text-center">No fixtures found for this league right now.</p>
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {series.map((match, i) => (
+    <div className="max-h-[420px] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3 pr-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-brand-border">
+      {matches.map((match, i) => (
         <FootballScoreCard key={match.id ?? i} match={match} />
       ))}
     </div>
