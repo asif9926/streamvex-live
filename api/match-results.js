@@ -68,7 +68,6 @@ export default async function handler(req, res) {
     } else {
       // ── Football Logic (With Backtracking for Sparse Fixtures) ──
       const pad = (n) => String(n).padStart(2, '0')
-      // ✅ [FIX] DD/MM/YYYY ফরম্যাটে ডেট কনভার্ট করা (স্ল্যাশ ব্যবহার করে)
       const toPath = (d) => `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`
       
       const headers = {
@@ -82,8 +81,8 @@ export default async function handler(req, res) {
       let lastRes    = null
 
       for (let i = 0; i < MAX_DAYS_BACK; i++) {
-        // আজকের থেকে ১-৩ দিন পেছনের ডেটা চেক করা
-        const d   = new Date(Date.now() - (i + 1) * 86400000) 
+        // ✅ [Update] i = 0 (Ajke), i = 1 (Gotokal), i = 2 (Tar ager din)
+        const d   = new Date(Date.now() - (i * 86400000)) 
         const url = `${fetchUrl}/${toPath(d)}`
         
         let r
@@ -105,7 +104,7 @@ export default async function handler(req, res) {
         const items = extractItems(json)
         if (items.length) collected = collected.concat(items)
 
-        // যদি পর্যাপ্ত রেজাল্ট পাওয়া যায়, লুপ ব্রেক করা হবে
+        // jodi porjapto result paoya jay, loop break kora hobe
         if (collected.length >= 12) break
         await sleep(250) 
       }
@@ -114,7 +113,7 @@ export default async function handler(req, res) {
       if (collected.length) {
         data = normalizeResults(collected, sport, true)
       }
-    }
+
 
     if (!response || !response.ok) {
       console.error(`[match-results] RapidAPI Error for ${sport}`)
