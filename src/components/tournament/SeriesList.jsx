@@ -90,7 +90,11 @@ function SeriesCard({ series, selected, onClick }) {
         }
       `}
     >
-      {series.flag && <span className="text-lg shrink-0">{series.flag}</span>}
+      {series.flag && (
+        series.flag.startsWith('http')
+          ? <img src={series.flag} alt="" className="w-5 h-5 object-contain shrink-0" loading="lazy" />
+          : <span className="text-lg shrink-0">{series.flag}</span>
+      )}
 
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-bold leading-snug truncate

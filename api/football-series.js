@@ -15,18 +15,13 @@ const FD_BASE    = 'https://api.football-data.org/v4'
 const CACHE_TTL  = 86400   // 24 hours
 const EDGE_CACHE = 's-maxage=86400, stale-while-revalidate=172800'  // ✅ [Update #1]
 
-// Blueprint supported leagues
-const SUPPORTED_LEAGUES = {
-  CL:  2001,   // UEFA Champions League
-  WC:  2000,   // FIFA World Cup
-  PL:  2021,   // Premier League
-  PD:  2014,   // La Liga
-  BL1: 2002,   // Bundesliga
-  SA:  2019,   // Serie A
-  FL1: 2015,   // Ligue 1
-  PPL: 2017,   // Primeira Liga
-  DED: 2003,   // Eredivisie
-  BSA: 2013,   // Brasileirão
+// ✅ [Update] League list is now dynamic (see api/football-leagues.js),
+// so this no longer restricts to a hardcoded set of shortcodes — it
+// accepts any numeric football-data.org competition ID directly.
+// Kept only for backward compatibility with old ?league=CL style links.
+const LEGACY_SHORTCODES = {
+  CL: '2001', WC: '2000', PL: '2021', PD: '2014', BL1: '2002',
+  SA: '2019', FL1: '2015', PPL: '2017', DED: '2003', BSA: '2013',
 }
 
 // ✅ [Fix] football-data.org এ comma-separated status কাজ করে না
@@ -47,18 +42,18 @@ async function fetchMatches(competitionId, status, authToken) {
 
 export default async function handler(req, res) {
   // ✅ [Fix] CORS locked to own domain
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
   res.setHeader('Access-Control-Allow-Origin',  allowedOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Vary', 'Origin')
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET')    return res.status(405).json({ error: 'Method not allowed' })
 
-  const leagueCode    = (req.query.league || 'CL').toUpperCase()
-  const competitionId = SUPPORTED_LEAGUES[leagueCode]
+  const leagueCode    = (req.query.league || '2001').toString().toUpperCase()
+  const competitionId = /^\d+$/.test(leagueCode) ? leagueCode : LEGACY_SHORTCODES[leagueCode]
   if (!competitionId) {
     return res.status(400).json({
-      error: `Unknown league: ${leagueCode}. Supported: ${Object.keys(SUPPORTED_LEAGUES).join(', ')}`,
+      error: `Unknown league: ${leagueCode}. Expected a numeric football-data.org competition ID.`,
     })
   }
 

@@ -6,6 +6,7 @@
 import { useState }                 from 'react'
 import { motion, AnimatePresence }  from 'framer-motion'
 import { useSeries }                from '../hooks/useSeries.js'
+import { useFootballLeagues }       from '../hooks/useFootballLeagues.js'
 import { useMatchResults }          from '../hooks/useMatchResults.js'
 import { useUpcoming }              from '../hooks/useUpcoming.js'
 import PageMeta                     from '../components/ui/PageMeta.jsx'
@@ -17,15 +18,6 @@ import UpcomingMatchCard            from '../components/tournament/UpcomingMatch
 import FootballScoreCard            from '../components/scoring/FootballScoreCard.jsx'
 import { SkeletonCard }             from '../components/ui/Skeleton.jsx'
 
-// ── Football league options ───────────────────────────
-const FOOTBALL_LEAGUES = [
-  { id: 'CL',  name: 'UEFA Champions League', flag: '⭐', group: 'Europe'        },
-  { id: 'WC',  name: 'FIFA World Cup 2026',   flag: '🌍', group: 'International' },
-  { id: 'PL',  name: 'Premier League',        flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', group: 'England'       },
-  { id: 'PD',  name: 'La Liga',               flag: '🇪🇸', group: 'Spain'         },
-  { id: 'BL1', name: 'Bundesliga',            flag: '🇩🇪', group: 'Germany'       },
-  { id: 'SA',  name: 'Serie A',               flag: '🇮🇹', group: 'Italy'         },
-]
 
 // ── Tab configs ───────────────────────────────────────
 const SPORT_TABS = [
@@ -131,13 +123,14 @@ function CricketSeriesTab() {
 // series-style card (same accordion UI as cricket); clicking one fetches
 // and expands that league's fixtures inline, right under the card.
 function FootballSeriesTab() {
-  // Static list, shaped like SeriesList expects (id, name, flag, group)
-  const leagueSeries = FOOTBALL_LEAGUES
+  const { leagues, loading, isError } = useFootballLeagues()
+
+  if (isError) return <ErrorState label="leagues" />
 
   return (
     <SeriesList
-      series={leagueSeries}
-      loading={false}
+      series={leagues}
+      loading={loading}
       renderMatches={(series) => <FootballLeagueMatches league={series.id} />}
     />
   )
