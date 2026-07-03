@@ -30,7 +30,7 @@ const CACHE_TTL  = 3600  // 1 hour KV TTL
 const EDGE_CACHE = 's-maxage=3600, stale-while-revalidate=7200'  // ✅ [Update #1]
 
 export default async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
   res.setHeader('Access-Control-Allow-Origin',  allowedOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Vary', 'Origin')
@@ -42,13 +42,20 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid sport. Use cricket or football.' })
   }
 
+  // ✅ [Debug aid] ?nocache=1 skips BOTH the KV read and the edge
+  // Cache-Control header, so a stale cached (e.g. pre-fix) response can't
+  // hide a real fix behind a 1-hour TTL. Handy for verifying a deploy
+  // directly from the browser: /api/match-results?sport=football&nocache=1
+  const bypassCache = req.query.nocache === '1' || req.query.nocache === 'true'
+  const cacheHeader = bypassCache ? 'no-store' : EDGE_CACHE   // ✅ don't let a diagnostic call get cached either
+
   const cacheKey = `match-results:${sport}`
 
   try {
     // ── 1. KV Cache ───────────────────────────────────
-    const cached = await kv.get(cacheKey)
+    const cached = bypassCache ? null : await kv.get(cacheKey)
     if (cached) {
-      res.setHeader('Cache-Control', EDGE_CACHE)
+      res.setHeader('Cache-Control', cacheHeader)
       return res.status(200).json({ source: 'cache', data: cached._data || cached })
     }
 
@@ -111,7 +118,7 @@ export default async function handler(req, res) {
         const data    = normalizeResults(merged, sport, /* alreadyExtracted */ true)
 
         await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
-        res.setHeader('Cache-Control', EDGE_CACHE)
+        res.setHeader('Cache-Control', cacheHeader)
         return res.status(200).json({ source: 'api', data })
       }
     }
@@ -123,7 +130,7 @@ export default async function handler(req, res) {
       console.error(`[match-results] RapidAPI ${response.status} for ${sport} — url: ${response.url}`)
       const stale = await kv.get(cacheKey).catch(() => null)
       if (stale) {
-        res.setHeader('Cache-Control', EDGE_CACHE)
+        res.setHeader('Cache-Control', cacheHeader)
         return res.status(200).json({ source: 'stale_cache', data: stale._data || stale })
       }
       // ✅ [Fix] crash এর বদলে empty array সহ 200 — frontend ভাঙবে না
@@ -137,7 +144,7 @@ export default async function handler(req, res) {
     // ── 3. KV save ───────────────────────────────────
     await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
 
-    res.setHeader('Cache-Control', EDGE_CACHE)
+    res.setHeader('Cache-Control', cacheHeader)
     return res.status(200).json({ source: 'api', data })
 
   } catch (error) {
@@ -145,7 +152,7 @@ export default async function handler(req, res) {
     try {
       const stale = await kv.get(cacheKey)
       if (stale) {
-        res.setHeader('Cache-Control', EDGE_CACHE)
+        res.setHeader('Cache-Control', cacheHeader)
         return res.status(200).json({ source: 'stale_cache', data: stale._data || stale })
       }
     } catch {}
