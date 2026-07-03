@@ -1,12 +1,13 @@
 // api/match-results.js — Completed cricket results + Football fixtures/schedule
 // Blueprint: RapidAPI → Vercel KV (30-60 min cache)
+// ✅ [Update #1] Edge Cache: s-maxage=3600, stale-while-revalidate=7200
 // ✅ [Bug Fix] Corrected Football Endpoint path to /api/matches
 // ✅ [Bug Fix] Corrected Date format to DD/MM/YYYY
+// ✅ [Update #2] Football date logic updated to fetch Today (i=0), Yesterday (i=1), etc.
 
 import { kv } from '@vercel/kv'
 
 const CRICKET_RESULTS_API  = 'https://cricket-live-line1.p.rapidapi.com/recentMatches'
-// ✅ [FIX] সঠিক এন্ডপয়েন্ট পাথ (football শব্দটি হবে না)
 const FOOTBALL_RESULTS_API = 'https://allsportsapi2.p.rapidapi.com/api/matches'
 const CRICKET_HOST         = 'cricket-live-line1.p.rapidapi.com'
 const FOOTBALL_HOST        = 'allsportsapi2.p.rapidapi.com'
@@ -51,6 +52,7 @@ export default async function handler(req, res) {
     let data = []
 
     if (sport === 'cricket') {
+      // Cricket er endpoint auto recent matches return kore (Today + Previous days)
       response = await fetch(fetchUrl, {
         headers: {
           'x-rapidapi-key':  process.env.RAPIDAPI_KEY,
@@ -104,7 +106,6 @@ export default async function handler(req, res) {
         const items = extractItems(json)
         if (items.length) collected = collected.concat(items)
 
-        // jodi porjapto result paoya jay, loop break kora hobe
         if (collected.length >= 12) break
         await sleep(250) 
       }
@@ -113,7 +114,7 @@ export default async function handler(req, res) {
       if (collected.length) {
         data = normalizeResults(collected, sport, true)
       }
-
+    }
 
     if (!response || !response.ok) {
       console.error(`[match-results] RapidAPI Error for ${sport}`)
