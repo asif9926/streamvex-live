@@ -1,9 +1,10 @@
 // api/match-results.js — Completed cricket results + Football fixtures/schedule
 // Blueprint: RapidAPI → Vercel KV (30-60 min cache)
 // ✅ [Update #1] Edge Cache: s-maxage=3600, stale-while-revalidate=7200
-// ✅ [Fix] Correct RapidAPI endpoint paths — verified against working production reference
-//    Cricket:  /matches?type=result  →  /recentMatches      (cricket-live-line1 real endpoint)
-//    Football: /api/football/matches/result  →  /api/events/schedule  (allsportsapi2 real endpoint, date param)
+// ✅ [Bug Fix — v2] Football endpoint corrected after confirming 404 in
+//    production logs. See FOOTBALL_RESULTS_API comment below for details.
+//    Cricket:  /matches?type=result  →  /recentMatches                    (cricket-live-line1)
+//    Football: /api/events/schedule (404!) → /api/matches/{d}/{m}/{y}     (allsportsapi2)
 //
 // Env vars required:
 //   RAPIDAPI_KEY
@@ -13,8 +14,15 @@ import { kv } from '@vercel/kv'
 
 // ✅ [Fix] সঠিক endpoint — cricket completed matches
 const CRICKET_RESULTS_API  = 'https://cricket-live-line1.p.rapidapi.com/recentMatches'
-// ✅ [Fix] সঠিক endpoint — football এর জন্য date-based schedule (results না, কিন্তু এটাই real route)
-const FOOTBALL_RESULTS_API = 'https://allsportsapi2.p.rapidapi.com/api/events/schedule'
+// ✅ [Bug Fix — v2] `/api/events/schedule?date=...` returns a hard 404
+// (confirmed via production Vercel logs: "RapidAPI 404 for football").
+// The API author's own FAQ (github.com/lacassef/recodexapicodeexamples)
+// documents the real date-based pattern as day/month/year PATH segments,
+// not a query string — e.g. `/api/category/{id}/events/{day}/{month}/{year}`.
+// Our own `/api/matches/live` (in api/live-score.js) already works and
+// confirms the base resource path is `/api/matches/...`, so the
+// non-live/date-scoped sibling is `/api/matches/{day}/{month}/{year}`.
+const FOOTBALL_RESULTS_API = 'https://allsportsapi2.p.rapidapi.com/api/matches'
 const CRICKET_HOST         = 'cricket-live-line1.p.rapidapi.com'
 const FOOTBALL_HOST        = 'allsportsapi2.p.rapidapi.com'
 
@@ -22,7 +30,7 @@ const CACHE_TTL  = 3600  // 1 hour KV TTL
 const EDGE_CACHE = 's-maxage=3600, stale-while-revalidate=7200'  // ✅ [Update #1]
 
 export default async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
   res.setHeader('Access-Control-Allow-Origin',  allowedOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Vary', 'Origin')
@@ -70,10 +78,13 @@ export default async function handler(req, res) {
       // nothing to show even though yesterday's finished matches existed.
       // Now we fetch today + yesterday and merge, so "recent results"
       // actually has something recent to show most of the time.
+      // ✅ [Bug Fix] Path-segment date format (day/month/year), not a
+      // ?date= query string — see FOOTBALL_RESULTS_API comment above.
       const todayDate     = new Date()
       const yesterdayDate = new Date(Date.now() - 86400000)
-      const todayStr      = todayDate.toISOString().split('T')[0]
-      const yesterdayStr  = yesterdayDate.toISOString().split('T')[0]
+      const toPath = (d) => `${d.getUTCDate()}/${d.getUTCMonth() + 1}/${d.getUTCFullYear()}`
+      const todayPath      = toPath(todayDate)
+      const yesterdayPath  = toPath(yesterdayDate)
 
       const headers = {
         'x-rapidapi-key':  process.env.RAPIDAPI_KEY,
@@ -81,8 +92,8 @@ export default async function handler(req, res) {
       }
 
       const [todayRes, yesterdayRes] = await Promise.all([
-        fetch(`${fetchUrl}?date=${todayStr}`,     { headers, signal: AbortSignal.timeout(10000) }),
-        fetch(`${fetchUrl}?date=${yesterdayStr}`, { headers, signal: AbortSignal.timeout(10000) }),
+        fetch(`${fetchUrl}/${todayPath}`,     { headers, signal: AbortSignal.timeout(10000) }),
+        fetch(`${fetchUrl}/${yesterdayPath}`, { headers, signal: AbortSignal.timeout(10000) }),
       ])
 
       // Use whichever succeeded; if both failed, fall through to the
@@ -106,7 +117,10 @@ export default async function handler(req, res) {
     }
 
     if (!response.ok) {
-      console.error(`[match-results] RapidAPI ${response.status} for ${sport}`)
+      // ✅ [Debug aid] Log the exact URL attempted — if this endpoint
+      // guess also turns out wrong, the Vercel log will show precisely
+      // which path 404'd instead of just a bare status code.
+      console.error(`[match-results] RapidAPI ${response.status} for ${sport} — url: ${response.url}`)
       const stale = await kv.get(cacheKey).catch(() => null)
       if (stale) {
         res.setHeader('Cache-Control', EDGE_CACHE)
