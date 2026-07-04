@@ -81,20 +81,26 @@ export default function App() {
 
         {/* Main content area — ml-64 matches Sidebar's fixed w-64 */}
         <main className="flex-1 min-w-0 lg:ml-64">
-          <Suspense fallback={<PageFallback />}>
-            <AnimatePresence mode="wait">
-              <Routes location={location} key={location.pathname}>
-                <Route path="/"              element={<Home />} />
-                <Route path="/sports"        element={<Sports />} />
-                <Route path="/bangladesh-tv" element={<BangladeshiTV />} />
-                <Route path="/live-score"    element={<LiveScore />} />
-                <Route path="/tournament"    element={<Tournament />} />
-                <Route path="/favorites"     element={<Favorites />} />
-                <Route path="/about"         element={<About />} />
-                <Route path="*"              element={<NotFound />} />
-              </Routes>
-            </AnimatePresence>
-          </Suspense>
+          {/* ✅ [Bug Fix] pb-10 here (not on individual pages) — no page's
+              last section had bottom margin, so content butted directly
+              against the footer everywhere, not just on Home. Fixing it
+              once here covers every route consistently. */}
+          <div className="pb-10">
+            <Suspense fallback={<PageFallback />}>
+              <AnimatePresence mode="wait">
+                <Routes location={location} key={location.pathname}>
+                  <Route path="/"              element={<Home />} />
+                  <Route path="/sports"        element={<Sports />} />
+                  <Route path="/bangladesh-tv" element={<BangladeshiTV />} />
+                  <Route path="/live-score"    element={<LiveScore />} />
+                  <Route path="/tournament"    element={<Tournament />} />
+                  <Route path="/favorites"     element={<Favorites />} />
+                  <Route path="/about"         element={<About />} />
+                  <Route path="*"              element={<NotFound />} />
+                </Routes>
+              </AnimatePresence>
+            </Suspense>
+          </div>
 
           <Footer />
         </main>

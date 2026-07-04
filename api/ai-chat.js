@@ -18,7 +18,11 @@ const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions'
 // deprecated (June 2026 notice). Using Groq's current recommended
 // production model instead.
 const MODEL      = 'openai/gpt-oss-120b'
-const MAX_TOKENS = 200                   // Blueprint: "2-3 sentences max"
+// ✅ [Scope upgrade] 200 tokens was tuned for terse live-score updates only.
+// Squad lists and multi-point analysis (now explicitly allowed) need more
+// room — 350 still keeps answers concise (well under a short paragraph)
+// while not truncating mid-list.
+const MAX_TOKENS = 350
 
 // ── Rate limiter ──────────────────────────────────────
 // ✅ [Fix #2] cleanup: Map এ 500+ IP জমলে পুরনোগুলো মুছে ফেলো
@@ -97,14 +101,27 @@ export default async function handler(req, res) {
 
   // ── Build conversation messages ───────────────────────
   // ✅ [Fix #1] history[] → Groq messages format এ convert করো
-  // Blueprint: "Be concise (2-3 sentences max). Respond in same language user asks in."
+  // ✅ [Scope upgrade] Previously the prompt said "Never make up specific
+  // statistics — only use the data provided," which accidentally blocked
+  // the AI from answering ANYTHING outside the narrow live-score JSON —
+  // including things it genuinely knows from training (typical squads,
+  // player backgrounds, team history) or reasonable analysis (who's
+  // favoured for Man of the Match based on current performance). The
+  // restriction now applies specifically to LIVE, IN-PROGRESS facts
+  // (current score, wickets, minute, events) — general cricket/football
+  // knowledge is explicitly allowed, with a requirement to be clear about
+  // which is which so the person isn't misled into thinking a knowledge-
+  // based guess is confirmed live data.
   const systemPrompt =
-`You are a live cricket and football sports analyst for StreamVex Live.
-${safeContext ? `Live match data:\n${safeContext}\n` : ''}
-Answer questions about the current match situation, player performance, and predictions.
-Be concise (2-3 sentences max). Respond in the same language the user asks in (Bengali or English).
-If no live match data is provided, give a general sports analysis.
-Never make up specific statistics — only use the data provided.`
+`You are a knowledgeable cricket and football analyst for StreamVex Live, with strong general knowledge of both sports — teams, squads, players, history, and records — in addition to the live match data provided below.
+${safeContext ? `Live match data (authoritative for anything happening in THIS match right now):\n${safeContext}\n` : 'No live match data was provided for this conversation.'}
+
+How to answer:
+- For the current score, wickets/goals, overs/minute, or anything about what's happening in this specific match right now: rely ONLY on the live match data above. Never invent live numbers that aren't there.
+- For everything else the live data doesn't cover — squads, player backgrounds, team history, past head-to-head, who's statistically in form, who might be a Man of the Match contender based on the current situation — freely use your general cricket/football knowledge. Don't refuse these questions.
+- When answering from general knowledge rather than the live data, say so briefly (e.g. "সাধারণভাবে..." / "Historically...") so it's clear it isn't a live-confirmed fact. Your knowledge has a cutoff, so for very recent squad/transfer changes, mention that specifically if relevant.
+- Be concise: 2-4 sentences for most answers, a short list is fine for squad-type questions.
+- Respond in the same language the user asks in (Bengali or English).`
 
   // ✅ [Fix #1] Validate and convert history array — max 10 turns to avoid context overflow
   const safeHistory = Array.isArray(history)
