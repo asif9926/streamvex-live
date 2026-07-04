@@ -54,7 +54,7 @@ export default async function handler(req, res) {
   // /api/match-results?sport=football&nocache=1
   const bypassCache = req.query.nocache === '1' || req.query.nocache === 'true'
   const cacheHeader = bypassCache ? 'no-store' : EDGE_CACHE
-  const cacheKey    = `match-results:v2:${sport}`
+  const cacheKey    = `match-results:v3:${sport}`
 
   try {
     // ── 1. KV Cache Check ─────────────────────────────
@@ -147,6 +147,13 @@ export default async function handler(req, res) {
       }
 
       response = lastResponse
+      // ✅ [Fix] Was unsorted — matches were grouped by which league they
+      // came from (each individually ascending within its own window), so
+      // the oldest date ended up first and the newest last. Sort by raw
+      // utcDate BEFORE formatting (normalizeFootballDataOrgResults turns
+      // utcDate into a display string, which can't be sorted correctly
+      // afterwards). Most recently finished match first, like a results feed.
+      collected.sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate))
       data     = normalizeFootballDataOrgResults(collected)
       debug    = { leaguesTried, rawMatchCount: collected.length, dateFrom, dateTo }
     }

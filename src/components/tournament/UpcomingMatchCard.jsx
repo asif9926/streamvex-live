@@ -38,9 +38,9 @@ export default function UpcomingMatchCard({ match }) {
       {/* Match info */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-white truncate">{match.name}</p>
-        {(match.matchType || match.venue) && (
+        {(match.matchType || match.tournament || match.venue || match.round) && (
           <p className="text-[10px] text-white/30 mt-0.5 truncate">
-            {[match.matchType, match.venue].filter(Boolean).join(' · ')}
+            {[match.matchType, match.tournament, match.venue, match.round].filter(Boolean).join(' · ')}
           </p>
         )}
       </div>
