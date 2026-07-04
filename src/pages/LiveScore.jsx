@@ -7,7 +7,6 @@ import { useState }         from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLiveScores }    from '../hooks/useLiveScores.js'
 import PageMeta             from '../components/ui/PageMeta.jsx'
-import SectionHeader        from '../components/ui/SectionHeader.jsx'
 import Tabs                 from '../components/ui/Tabs.jsx'
 import ErrorBoundary        from '../components/ui/ErrorBoundary.jsx'
 import ScoreSkeleton        from '../components/scoring/ScoreSkeleton.jsx'
@@ -42,34 +41,48 @@ export default function LiveScoring() {
         description="Real-time cricket and football live scores — ball-by-ball updates, match status and more."
       />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <SectionHeader
-          title="⚡ Live Scores"
-          subtitle={
-            loading
+      {/* ✅ [UX Fix] Header restructured for compactness — title stays
+          left; Refresh button + "cached" badge + "Updated: ..." time are
+          now stacked together on the right as ONE compact block (was 3
+          separate stacked rows: title, then refresh-row, then a
+          full-width "Updated" line). This removes ~2 extra rows of
+          vertical space before any actual score content is visible,
+          which matters most on mobile where every row of scroll counts. */}
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold text-white leading-snug">⚡ Live Scores</h2>
+          <p className="text-sm text-white/40 mt-0.5">
+            {loading
               ? 'Fetching latest scores…'
               : hasLive
                 ? `${liveMatches.length} match${liveMatches.length !== 1 ? 'es' : ''} live now`
-                : 'No live matches right now'
-          }
-        />
+                : 'No live matches right now'}
+          </p>
+        </div>
 
-        {/* Refresh button + source badge */}
-        <div className="flex items-center gap-2 shrink-0">
-          {source === 'cache' && (
-            <span className="text-[10px] text-white/25 border border-white/10 px-2 py-0.5 rounded-full">
-              cached
-            </span>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className="flex items-center gap-2">
+            {source === 'cache' && (
+              <span className="text-[10px] text-white/25 border border-white/10 px-2 py-0.5 rounded-full">
+                cached
+              </span>
+            )}
+            <button
+              onClick={() => refresh()}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-border text-white/50 hover:text-white hover:border-white/20 text-xs font-semibold transition-all disabled:opacity-40"
+            >
+              <RefreshIcon className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          </div>
+          {/* ✅ [UX Fix] Updated-time moved here, small, right under Refresh
+              — instead of its own full-width line further down the page. */}
+          {lastUpdated && !loading && (
+            <p className="text-[10px] text-white/25">
+              Updated: {new Date(lastUpdated).toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit' })}
+            </p>
           )}
-          <button
-            onClick={() => refresh()}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-border text-white/50 hover:text-white hover:border-white/20 text-xs font-semibold transition-all disabled:opacity-40"
-          >
-            <RefreshIcon className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
         </div>
       </div>
 
@@ -79,15 +92,8 @@ export default function LiveScoring() {
         active={sport}
         onChange={setSport}
         variant="pill"
-        className="mb-6 max-w-xs"
+        className="mb-4 max-w-xs"
       />
-
-      {/* Last updated */}
-      {lastUpdated && !loading && (
-        <p className="text-[11px] text-white/25 mb-4">
-          Updated: {new Date(lastUpdated).toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit' })}
-        </p>
-      )}
 
       {/* Score content */}
       <AnimatePresence mode="wait">
