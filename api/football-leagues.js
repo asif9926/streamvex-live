@@ -18,6 +18,17 @@ const EDGE_CACHE  = 's-maxage=86400, stale-while-revalidate=172800'
 // ✅ [Fix] Well-known competitions pinned to the top of the list.
 const POPULAR_LEAGUE_ORDER = ['WC', 'CL', 'PL', 'PD', 'BL1', 'SA', 'FL1', 'EC']
 
+// ✅ [Fix] Last-resort fallback if football-data.org is unreachable/rate
+// -limited AND there's no cache yet (e.g. right after a fresh deploy).
+const FALLBACK_LEAGUES = [
+  { id: 'WC',  name: 'FIFA World Cup',          group: 'International', flag: '🌍' },
+  { id: 'CL',  name: 'UEFA Champions League',   group: 'Europe',        flag: '⭐' },
+  { id: 'PL',  name: 'Premier League',          group: 'England',       flag: '🏴' },
+  { id: 'PD',  name: 'La Liga',                 group: 'Spain',         flag: '🇪🇸' },
+  { id: 'BL1', name: 'Bundesliga',               group: 'Germany',       flag: '🇩🇪' },
+  { id: 'SA',  name: 'Serie A',                  group: 'Italy',         flag: '🇮🇹' },
+]
+
 export default async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
   res.setHeader('Access-Control-Allow-Origin',  allowedOrigin)
@@ -86,6 +97,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ source: 'api', data })
 
   } catch (error) {
+    // ✅ Logs the *exact* upstream reason (429 rate-limit, 403 plan
+    // restriction, 401 bad key, timeout, etc.) — check Vercel Function Logs
+    // for this line when diagnosing.
     console.error('[football-leagues] Error:', error.message)
     try {
       const stale = await kv.get(cacheKey)
@@ -94,6 +108,13 @@ export default async function handler(req, res) {
         return res.status(200).json({ source: 'stale_cache', data: stale._data || stale })
       }
     } catch {}
-    return res.status(500).json({ error: 'Service unavailable.' })
+
+    // ✅ [Fix] Graceful degrade — if football-data.org is down/rate-limited
+    // AND there's no cache at all (e.g. right after a deploy), show a small
+    // curated fallback list instead of a hard "Failed to load" wall. Users
+    // still see something useful; the dynamic list resumes once the API
+    // call succeeds again.
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).json({ source: 'fallback', data: FALLBACK_LEAGUES })
   }
 }
