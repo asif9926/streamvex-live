@@ -18,7 +18,7 @@ const EDGE_CACHE          = 's-maxage=600, stale-while-revalidate=1200'
 
 export default async function handler(req, res) {
   // ── CORS ─────────────────────────────────────────────
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
   res.setHeader('Access-Control-Allow-Origin',  allowedOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Vary', 'Origin')
@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid seriesId format' })
   }
 
-  const cacheKey = `series-matches:${seriesId}`
+  const cacheKey = `series-matches:v2:${seriesId}`
 
   try {
     // ── 1. KV Cache (10min) ───────────────────────────
@@ -89,6 +89,12 @@ export default async function handler(req, res) {
         time:       formatTime(m.dateTimeGMT),
         startDate:  m.dateTimeGMT || null,
         teams:      m.teams || [],
+        // ✅ [Fix] Was never passed through — CricAPI's matchList items
+        // include a `score` array (same [{inning, r, w, o}] shape
+        // MatchResultCard already renders), but nothing here ever
+        // extracted it, so a finished match inside an expanded series
+        // had no way to show its result.
+        score:      m.score || [],
         isLive,
         isUpcoming,
         isFinished: m.matchEnded || false,
@@ -97,11 +103,15 @@ export default async function handler(req, res) {
       }
     })
 
-    // Sort: live first → upcoming → finished
+    // Sort: live first → upcoming (soonest first) → finished (most recent first)
     data.sort((a, b) => {
       const rank = (x) => x.isLive ? 0 : x.isUpcoming ? 1 : 2
-      if (rank(a) !== rank(b)) return rank(a) - rank(b)
-      if (a.startDate && b.startDate) return new Date(a.startDate) - new Date(b.startDate)
+      const ra = rank(a), rb = rank(b)
+      if (ra !== rb) return ra - rb
+      if (a.startDate && b.startDate) {
+        const diff = new Date(a.startDate) - new Date(b.startDate)
+        return ra === 2 ? -diff : diff   // finished bucket: descending (most recent first)
+      }
       return 0
     })
 

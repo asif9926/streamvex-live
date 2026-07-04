@@ -2,6 +2,7 @@
 
 import Skeleton from '../ui/Skeleton.jsx'
 import { useSeriesMatches } from '../../hooks/useLiveScores.js'
+import MatchResultCard from './MatchResultCard.jsx'
 
 const FORMAT_COLORS = {
   Test: 'bg-amber-500/10  text-amber-400  border-amber-500/20',
@@ -30,6 +31,15 @@ export default function SeriesMatches({ seriesId }) {
   return (
     <div className="max-h-[420px] overflow-y-auto flex flex-col gap-2 pr-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-brand-border">
       {seriesMatches.map((match, i) => {
+        // ✅ [Fix] Finished matches now show their actual result (score,
+        // innings breakdown) via the same MatchResultCard used in the
+        // Results tab — previously every match in this list rendered as
+        // a plain "upcoming fixture" row regardless of whether it had
+        // already been played, so a finished match showed no score at all.
+        if (match.isFinished) {
+          return <MatchResultCard key={match.id || i} match={match} />
+        }
+
         const fmtCls = FORMAT_COLORS[match.format] || 'bg-white/5 text-white/30 border-white/10'
         return (
           <div
@@ -53,6 +63,12 @@ export default function SeriesMatches({ seriesId }) {
                 <p className="text-[10px] text-white/30 mt-0.5 truncate">📍 {match.venue}</p>
               )}
             </div>
+            {match.isLive && (
+              <span className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/25 text-green-400 text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0">
+                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-ping" />
+                LIVE
+              </span>
+            )}
             {match.format && (
               <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border shrink-0 ${fmtCls}`}>
                 {match.format}

@@ -12,14 +12,14 @@ const CACHE_TTL   = 86400   // 24 hours
 const EDGE_CACHE  = 's-maxage=86400, stale-while-revalidate=172800'  // ✅ [Update #1]
 
 export default async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
   res.setHeader('Vary', 'Origin')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET')    return res.status(405).json({ error: 'Method not allowed' })
 
-  const cacheKey = 'cricket-series'
+  const cacheKey = 'cricket-series:v2'
 
   try {
     // ── 1. KV Cache (24hr) ────────────────────────────
@@ -59,6 +59,34 @@ export default async function handler(req, res) {
       matches:    s.matches || 0,
       matchCount: (s.odi || 0) + (s.t20 || 0) + (s.test || 0),
     }))
+
+    // ✅ [Fix] CricAPI returns series in no particular useful order — ended
+    // and upcoming series were mixed together randomly. Same 3-bucket
+    // pattern used for football fixtures: ongoing series first, then
+    // upcoming (soonest start first), then already-ended series last
+    // (most recently ended first) — so the list reads front-to-back like
+    // a calendar instead of the results feed it looked like before.
+    const now = Date.now()
+    data.sort((a, b) => {
+      const rank = (s) => {
+        const start = s.startDate ? new Date(s.startDate).getTime() : null
+        const end   = s.endDate   ? new Date(s.endDate).getTime()   : null
+        if (start !== null && end !== null && start <= now && now <= end) return 0  // ongoing
+        if (start !== null && start > now) return 1                                  // upcoming
+        return 2                                                                     // ended
+      }
+      const ra = rank(a), rb = rank(b)
+      if (ra !== rb) return ra - rb
+      const da = a.startDate ? new Date(a.startDate) - 0 : 0
+      const db = b.startDate ? new Date(b.startDate) - 0 : 0
+      if (ra === 2) {
+        // ended — most recently ended first
+        const ea = a.endDate ? new Date(a.endDate).getTime() : 0
+        const eb = b.endDate ? new Date(b.endDate).getTime() : 0
+        return eb - ea
+      }
+      return da - db   // ongoing/upcoming — soonest start first
+    })
 
     // ── 3. KV save (24hr) ────────────────────────────
     await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
