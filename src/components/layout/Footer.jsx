@@ -89,7 +89,7 @@ export default function Footer() {
           <p className="text-[11px] text-white/25 order-1 sm:order-2">
             Developed by{' '}
             <Link to="/about" className="text-white/50 hover:text-brand-red font-medium transition-colors">
-              Tahmid
+              Asif Ul Haque
             </Link>
           </p>
         </div>
