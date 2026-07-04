@@ -31,13 +31,23 @@ const EXPLORE_CARDS = [
   { to: '/favorites',     label: 'Favorites',   emoji: '⭐', from: 'from-purple-900/40', live: false },
 ]
 
+// ✅ [Fix] Hero stats are now MANUAL, not computed from channel data.
+// Update these two numbers yourself whenever you add/remove channels —
+// they intentionally do NOT auto-update from channels.json/bdChannels.json.
+const MANUAL_STATS = {
+  totalChannels: '31+',   // ← update when you add/remove channels
+  liveNow:       '22',    // ← update when your live channel count changes
+}
+
 export default function Home() {
   const channels   = useChannelStore(s => s.channels)
   const bdChannels = useChannelStore(s => s.bdChannels)
 
-  const liveChannels = channels.filter(c => c.isLive).slice(0, 8)
-  const bdLive       = bdChannels.filter(c => c.isLive).slice(0, 4)
-  const totalChannels = channels.length + bdChannels.length
+  // ✅ [Fix] Explicit id-ascending sort (was relying on JSON file order,
+  // which happened to work but wasn't guaranteed) + Live Sports capped at
+  // 6 (was 8).
+  const liveChannels = channels.filter(c => c.isLive).sort((a, b) => a.id - b.id).slice(0, 6)
+  const bdLive       = bdChannels.filter(c => c.isLive).sort((a, b) => a.id - b.id).slice(0, 4)
 
   return (
     <>
@@ -113,9 +123,9 @@ export default function Home() {
           {/* Right — stats */}
           <div className="flex flex-row sm:flex-col gap-5 sm:gap-6 shrink-0">
             {[
-              { value: `${totalChannels}+`, label: 'Total Channels' },
-              { value: `${liveChannels.length}`,  label: 'Live Now'       },
-              { value: 'HD',                       label: 'Stream Quality' },
+              { value: MANUAL_STATS.totalChannels, label: 'Total Channels' },
+              { value: MANUAL_STATS.liveNow,        label: 'Live Now'       },
+              { value: 'HD',                        label: 'Stream Quality' },
             ].map(stat => (
               <div key={stat.label} className="text-center">
                 <p className="text-2xl sm:text-3xl font-black gradient-text">{stat.value}</p>
@@ -150,17 +160,14 @@ export default function Home() {
         </motion.section>
       )}
 
-      {/* ── Recent Results — Cricket + Football ── */}
+      {/* ── Recent Results — Football first, then Cricket, one combined feed ── */}
       <motion.section {...fadeUp(0.2)} className="mb-10">
         <SectionHeader title="🕒 Recent Results" subtitle="Latest completed matches">
           <Link to="/tournament" className="text-sm text-brand-red hover:text-red-400 font-semibold transition-colors">
             All Results →
           </Link>
         </SectionHeader>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <RecentResultsPanel sport="cricket"  label="🏏 Cricket" />
-          <RecentResultsPanel sport="football" label="⚽ Football" />
-        </div>
+        <RecentResultsCombined />
       </motion.section>
 
       {/* ── Explore cards ── */}
@@ -189,26 +196,38 @@ export default function Home() {
   )
 }
 
-// ── Recent Results Panel ──────────────────────────────
-function RecentResultsPanel({ sport, label }) {
-  const { results, loading } = useTournamentMatches(sport)
-  const shown = results.slice(0, 3)
+// ── Recent Results Panel — combined, Football first then Cricket ──
+function RecentResultsCombined() {
+  const { results: footballResults, loading: fLoading } = useTournamentMatches('football')
+  const { results: cricketResults,  loading: cLoading } = useTournamentMatches('cricket')
+
+  const loading  = fLoading || cLoading
+  const football = footballResults.slice(0, 2)
+  const cricket  = cricketResults.slice(0, 2)
+  const hasAny   = football.length > 0 || cricket.length > 0
 
   return (
     <div className="bg-brand-surface border border-brand-border rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-brand-border">
-        <span className="text-sm font-bold text-white/80">{label}</span>
-        <Link to="/tournament" className="text-[11px] text-white/40 hover:text-white transition-colors">
-          See All →
-        </Link>
-      </div>
-      <div className="p-4 flex flex-col gap-3 min-h-[140px]">
+      <div className="p-4 flex flex-col gap-4 min-h-[140px]">
         {loading ? (
-          [...Array(3)].map((_, i) => <SkeletonCard key={i} className="h-20" />)
-        ) : shown.length > 0 ? (
-          sport === 'cricket'
-            ? shown.map((m, i) => <MatchResultCard key={m.id ?? i} match={m} />)
-            : shown.map((m, i) => <FootballScoreCard key={m.id ?? i} match={m} />)
+          <div className="flex flex-col gap-3">
+            {[...Array(4)].map((_, i) => <SkeletonCard key={i} className="h-20" />)}
+          </div>
+        ) : hasAny ? (
+          <>
+            {football.length > 0 && (
+              <div className="flex flex-col gap-3">
+                <p className="text-[11px] font-bold text-white/35 uppercase tracking-wider">⚽ Football</p>
+                {football.map((m, i) => <FootballScoreCard key={`f-${m.id ?? i}`} match={m} />)}
+              </div>
+            )}
+            {cricket.length > 0 && (
+              <div className="flex flex-col gap-3">
+                <p className="text-[11px] font-bold text-white/35 uppercase tracking-wider">🏏 Cricket</p>
+                {cricket.map((m, i) => <MatchResultCard key={`c-${m.id ?? i}`} match={m} />)}
+              </div>
+            )}
+          </>
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <p className="text-white/25 text-sm">No recent results</p>

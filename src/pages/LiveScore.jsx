@@ -114,6 +114,16 @@ export default function LiveScoring() {
           {/* Loading skeleton */}
           {loading && !isError && <ScoreSkeleton count={6} />}
 
+          {/* ✅ [Fix] AI Match Analyst moved ABOVE the score grid — it was
+              previously stuck at the very bottom of the page where most
+              users would never scroll far enough to notice it. This is a
+              standout feature; it now gets first billing. */}
+          {!loading && !isError && hasLive && (
+            <ErrorBoundary label="AI Match Analyst">
+              <AIChatPanel matchContext={liveMatches} />
+            </ErrorBoundary>
+          )}
+
           {/* Live matches grid */}
           {!loading && !isError && hasLive && (
             <ErrorBoundary label="Live Score Grid">
@@ -124,14 +134,6 @@ export default function LiveScoring() {
                     : <FootballScoreCard key={match.id ?? i} match={match} />
                 )}
               </div>
-            </ErrorBoundary>
-          )}
-
-          {/* ✅ [Audit Fix] AI Match Analyst — only shown once there's actual
-              live-match data for it to reason about */}
-          {!loading && !isError && hasLive && (
-            <ErrorBoundary label="AI Match Analyst">
-              <AIChatPanel matchContext={liveMatches} />
             </ErrorBoundary>
           )}
 
