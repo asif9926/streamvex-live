@@ -15,15 +15,6 @@ const FD_BASE    = 'https://api.football-data.org/v4'
 const CACHE_TTL  = 86400   // 24 hours
 const EDGE_CACHE = 's-maxage=86400, stale-while-revalidate=172800'  // ✅ [Update #1]
 
-// ✅ [Update] League list is now dynamic (see api/football-leagues.js),
-// so this no longer restricts to a hardcoded set of shortcodes — it
-// accepts any numeric football-data.org competition ID directly.
-// Kept only for backward compatibility with old ?league=CL style links.
-const LEGACY_SHORTCODES = {
-  CL: '2001', WC: '2000', PL: '2021', PD: '2014', BL1: '2002',
-  SA: '2019', FL1: '2015', PPL: '2017', DED: '2003', BSA: '2013',
-}
-
 // ✅ [Fix] football-data.org এ comma-separated status কাজ করে না
 // Valid single values: SCHEDULED | LIVE | IN_PLAY | PAUSED | FINISHED | POSTPONED | CANCELLED
 // Approach: 2 separate requests → merge → deduplicate
@@ -59,12 +50,19 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET')    return res.status(405).json({ error: 'Method not allowed' })
 
-  const leagueCode    = (req.query.league || '2001').toString().toUpperCase()
-  const competitionId = /^\d+$/.test(leagueCode) ? leagueCode : LEGACY_SHORTCODES[leagueCode]
+  // ✅ [Fix] Previously this only accepted a numeric ID or a small
+  // hardcoded shortcode map (LEGACY_SHORTCODES) — any other real
+  // football-data.org code (e.g. "CLI" for Copa Libertadores, "ELC" for
+  // the Championship) was rejected with 400 *before ever calling the API*.
+  // football-data.org's own endpoint accepts either the numeric ID or its
+  // code interchangeably, so we just pass through whatever code the
+  // dynamic league list (api/football-leagues.js) gave us — no need to
+  // maintain a hardcoded map that will always be missing some competition.
+  const leagueCode    = (req.query.league || '2001').toString().toUpperCase().trim()
+  const isSane         = /^[A-Z0-9]{1,10}$/.test(leagueCode)   // basic sanity check, not a whitelist
+  const competitionId  = isSane ? leagueCode : null
   if (!competitionId) {
-    return res.status(400).json({
-      error: `Unknown league: ${leagueCode}. Expected a numeric football-data.org competition ID.`,
-    })
+    return res.status(400).json({ error: `Invalid league parameter: ${leagueCode}` })
   }
 
   // ✅ [Fix] Versioned — bumped because FINISHED matches are now merged in;
