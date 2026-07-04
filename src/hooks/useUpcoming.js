@@ -26,7 +26,7 @@ function normalizeArray(raw) {
  *
  * @param {'cricket'|'football'} sport
  * @param {object} options
- *   @param {string}  league — Football league code (default: 'CL')
+ *   @param {string}  league — Football league code (default: '' = all leagues aggregated)
  *   @param {number}  limit  — max items to return (default: 0 = all)
  *   @param {boolean} pause  — true হলে fetch করবে না
  *
@@ -45,13 +45,14 @@ function normalizeArray(raw) {
  * // Football fixtures
  * const { upcoming: fixtures } = useUpcoming('football', { league: 'PL', limit: 10 })
  */
-export function useUpcoming(sport = 'cricket', { league = 'CL', limit = 0, pause = false } = {}) {
+export function useUpcoming(sport = 'cricket', { league = '', limit = 0, pause = false } = {}) {
   // Blueprint exact endpoints:
   // cricket  → /api/cricket-upcoming
-  // football → /api/football-upcoming?league=CL
+  // football → /api/football-upcoming (no league = aggregated across all
+  //            major competitions; ?league=XX still works for one specific league)
   const endpoint = sport === 'cricket'
     ? '/api/cricket-upcoming'
-    : `/api/football-upcoming?league=${encodeURIComponent(league)}`
+    : `/api/football-upcoming${league ? `?league=${encodeURIComponent(league)}` : ''}`
 
   const { data, error, isLoading, mutate } = useSWR(
     pause ? null : endpoint,

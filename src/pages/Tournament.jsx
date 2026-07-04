@@ -34,7 +34,7 @@ const CONTENT_TABS = [
 export default function Tournament() {
   const [sport,  setSport]  = useState('cricket')
   const [subTab, setSubTab] = useState('series')
-  const [league] = useState('CL')  // fixed default — used only by football Upcoming tab filter
+
 
   // Reset subTab when sport changes
   const handleSportChange = (s) => {
@@ -100,7 +100,7 @@ export default function Tournament() {
 
           {/* ── UPCOMING TAB ── */}
           {subTab === 'upcoming' && (
-            <UpcomingTab sport={sport} league={league} />
+            <UpcomingTab sport={sport} />
           )}
         </motion.div>
       </AnimatePresence>
@@ -198,9 +198,8 @@ function ResultsTab({ sport }) {
 }
 
 // ── Upcoming Tab ──────────────────────────────────────
-function UpcomingTab({ sport, league }) {
+function UpcomingTab({ sport }) {
   const { upcoming, loading, isError, hasUpcoming } = useUpcoming(sport, {
-    league,
     limit: 20,
   })
 

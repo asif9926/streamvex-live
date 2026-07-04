@@ -54,7 +54,7 @@ export default async function handler(req, res) {
   // /api/match-results?sport=football&nocache=1
   const bypassCache = req.query.nocache === '1' || req.query.nocache === 'true'
   const cacheHeader = bypassCache ? 'no-store' : EDGE_CACHE
-  const cacheKey    = `match-results:${sport}`
+  const cacheKey    = `match-results:v2:${sport}`
 
   try {
     // ── 1. KV Cache Check ─────────────────────────────
@@ -234,17 +234,31 @@ function normalizeCricketResults(raw) {
 // schema drift, and consistent with how the rest of the app guards
 // against object-as-React-child crashes.
 function normalizeFootballDataOrgResults(matches) {
-  return matches.map(m => ({
-    id:        m.id,
-    homeTeam:  toText(m.homeTeam?.shortName || m.homeTeam?.name, 'Home'),
-    awayTeam:  toText(m.awayTeam?.shortName || m.awayTeam?.name, 'Away'),
-    homeScore: m.score?.fullTime?.home ?? m.score?.regularTime?.home ?? 0,
-    awayScore: m.score?.fullTime?.away ?? m.score?.regularTime?.away ?? 0,
-    tournament:toText(m.competition?.name, ''),
-    status:    'FT',
-    date:      m.utcDate || '',
-    isLive:    false,
-  }))
+  return matches.map(m => {
+    const rawDate  = m.utcDate || ''
+    const d        = rawDate ? new Date(rawDate) : null
+    const validDate = d && !isNaN(d)
+
+    return {
+      id:        m.id,
+      homeTeam:  toText(m.homeTeam?.shortName || m.homeTeam?.name, 'Home'),
+      awayTeam:  toText(m.awayTeam?.shortName || m.awayTeam?.name, 'Away'),
+      homeScore: m.score?.fullTime?.home ?? m.score?.regularTime?.home ?? null,
+      awayScore: m.score?.fullTime?.away ?? m.score?.regularTime?.away ?? null,
+      tournament:toText(m.competition?.name, ''),
+      // ✅ [Fix] Was the literal string 'FT' — FootballScoreCard checks for
+      // `status === 'FINISHED'` to show the "FT" badge and a formatted
+      // footer; anything else falls through to its "Upcoming" branch,
+      // which is exactly backwards for a *results* endpoint.
+      status:    'FINISHED',
+      // ✅ [Fix] Was the raw ISO string (m.utcDate) dumped straight into
+      // the card, e.g. "2026-07-02T00:00:00Z". Now formatted the same way
+      // as every other date shown in the app.
+      date:      validDate ? d.toLocaleDateString('en-BD', { day: '2-digit', month: 'short' }) : rawDate,
+      time:      validDate ? d.toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Dhaka' }) : '',
+      isLive:    false,
+    }
+  })
 }
 
 function detectFormat(str) {
