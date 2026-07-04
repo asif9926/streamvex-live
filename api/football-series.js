@@ -67,7 +67,10 @@ export default async function handler(req, res) {
     })
   }
 
-  const cacheKey = `football-series:${leagueCode}`
+  // ✅ [Fix] Versioned — bumped because FINISHED matches are now merged in;
+  // old cached entries (SCHEDULED+IN_PLAY only) would otherwise persist
+  // for up to 24hrs after deploy and hide the completed-matches fix.
+  const cacheKey = `football-series:v2:${leagueCode}`
 
   try {
     // ── 1. KV Cache (24hr) ────────────────────────────
@@ -85,25 +88,42 @@ export default async function handler(req, res) {
 
     // ── 2. ✅ [Fix] Separate requests per status ──────
     // football-data.org free plan: 10 req/min — small delay between calls
-    const [scheduledMatches, liveMatches] = await Promise.all([
+    // ✅ [Fix] FINISHED added — previously only SCHEDULED + IN_PLAY were
+    // fetched, so completed matches never showed up at all.
+    const [scheduledMatches, liveMatches, finishedMatchesRaw] = await Promise.all([
       fetchMatches(competitionId, 'SCHEDULED', token),
       fetchMatches(competitionId, 'IN_PLAY',   token),
+      fetchMatches(competitionId, 'FINISHED',  token),
     ])
+
+    // A full season of FINISHED matches can be large (100+) — only keep the
+    // most recent ones so the list stays relevant and small.
+    const finishedMatches = finishedMatchesRaw
+      .sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate))
+      .slice(0, 8)
 
     // Merge + deduplicate by id
     const seen   = new Set()
-    const merged = [...liveMatches, ...scheduledMatches].filter(m => {
+    const merged = [...liveMatches, ...scheduledMatches, ...finishedMatches].filter(m => {
       if (seen.has(m.id)) return false
       seen.add(m.id)
       return true
     })
 
-    // Sort: live first, then by date
+    // ✅ [Fix] 3 buckets now instead of 2: Live → Upcoming (soonest first)
+    // → recent Finished results (most recent first) at the bottom. A flat
+    // ascending-date sort would've put FINISHED (past) matches before
+    // SCHEDULED (future) ones, which reads backwards to a viewer.
     merged.sort((a, b) => {
-      const aLive = ['IN_PLAY', 'LIVE', 'PAUSED'].includes(a.status) ? 0 : 1
-      const bLive = ['IN_PLAY', 'LIVE', 'PAUSED'].includes(b.status) ? 0 : 1
-      if (aLive !== bLive) return aLive - bLive
-      return new Date(a.utcDate) - new Date(b.utcDate)
+      const rank = (m) => {
+        if (['IN_PLAY', 'LIVE', 'PAUSED'].includes(m.status)) return 0
+        if (m.status === 'FINISHED') return 2
+        return 1   // SCHEDULED / TIMED / upcoming
+      }
+      const ra = rank(a), rb = rank(b)
+      if (ra !== rb) return ra - rb
+      const diff = new Date(a.utcDate) - new Date(b.utcDate)
+      return ra === 2 ? -diff : diff   // finished: most-recent-first (descending)
     })
 
     // ── Competition name — fetch once ─────────────────

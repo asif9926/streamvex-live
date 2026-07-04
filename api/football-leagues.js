@@ -26,7 +26,11 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET')    return res.status(405).json({ error: 'Method not allowed' })
 
-  const cacheKey = 'football-leagues'
+  // ✅ [Fix] Versioned cache key — bump this suffix whenever the sort/filter
+  // logic changes, so a redeploy doesn't get stuck serving a stale KV entry
+  // computed under the old logic (this is exactly why the "popular leagues
+  // first" sort didn't show up after the first deploy — same key, cached data).
+  const cacheKey = 'football-leagues:v2'
 
   try {
     // ── 1. KV Cache (24hr) ────────────────────────────
