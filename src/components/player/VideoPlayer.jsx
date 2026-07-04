@@ -57,15 +57,15 @@ function VideoPlayerInner({ streamUrl, backupUrl, title = '', skipReferer = fals
 
     if (Hls.isSupported()) {
       const hls = new Hls({
-        enableWorker:                true,
-        lowLatencyMode:              true,
-        backBufferLength:            60,
-        maxBufferLength:             30,
-        liveSyncDurationCount:       3,
-        liveMaxLatencyDurationCount: 10,
-        fragLoadingTimeOut:          12000,  // ✅ [Perf] was 20000 — faster stall detection
-        manifestLoadingTimeOut:      8000,   // ✅ [Perf] was 15000
-        levelLoadingTimeOut:         8000,   // ✅ [Perf] was 15000
+          enableWorker:                true,
+          lowLatencyMode:              true,     // এটি লাইভের কাছাকাছি থাকতে সাহায্য করবে
+          backBufferLength:            30,       // মেমোরি বাঁচাতে পুরনো বাফার ডিলিট করবে
+          maxBufferLength:             20,       // 👈 ২০ সেকেন্ডের সেফ জোন (বাফারিং ঠেকাবে, কিন্তু বেশি পেছাবে না)[cite: 1]
+          liveSyncDurationCount:       3,        // 👈 লাইভ থেকে ৩টি সেগমেন্ট (প্রায় ৯-১২ সেকেন্ড) পিছিয়ে থাকবে[cite: 1]
+          liveMaxLatencyDurationCount: 10,       // 👈 বেশি পিছিয়ে গেলে অটোমেটিক আবার লাইভে জাম্প করবে[cite: 1]
+          fragLoadingTimeOut:          15000,    // 👈 ফাইল লোড হতে ১৫ সেকেন্ড সময় দিলে স্লো নেটেও বাফারিং এরর কমবে[cite: 1]
+          manifestLoadingTimeOut:      10000,    //[cite: 1]
+          levelLoadingTimeOut:         10000,
 
         // ✅ [UX Fix] Conservative ABR — start lower, ramp up only when the
         // network proves it can sustain higher quality. Prevents the

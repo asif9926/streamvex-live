@@ -28,16 +28,26 @@ const LEGACY_SHORTCODES = {
 // Valid single values: SCHEDULED | LIVE | IN_PLAY | PAUSED | FINISHED | POSTPONED | CANCELLED
 // Approach: 2 separate requests → merge → deduplicate
 async function fetchMatches(competitionId, status, authToken) {
-  const res = await fetch(
-    `${FD_BASE}/competitions/${competitionId}/matches?status=${status}`,
-    {
-      headers: { 'X-Auth-Token': authToken },
-      signal:  AbortSignal.timeout(8000),
-    }
-  )
-  if (!res.ok) return []
-  const json = await res.json()
-  return json.matches || []
+  try {
+    const res = await fetch(
+      `${FD_BASE}/competitions/${competitionId}/matches?status=${status}`,
+      {
+        headers: { 'X-Auth-Token': authToken },
+        signal:  AbortSignal.timeout(8000),
+      }
+    )
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.matches || []
+  } catch (err) {
+    // ✅ [Fix] Previously an uncaught timeout/network/JSON-parse error here
+    // propagated all the way up and crashed the WHOLE league's response
+    // with a 500 ("Failed to load fixtures"), even though the other status
+    // request might have succeeded fine. Degrade to "no matches" instead —
+    // the UI already handles an empty list gracefully.
+    console.error(`[football-series] fetchMatches(${competitionId}, ${status}) failed:`, err.message)
+    return []
+  }
 }
 
 export default async function handler(req, res) {

@@ -15,6 +15,9 @@ const FD_BASE     = 'https://api.football-data.org/v4'
 const CACHE_TTL   = 86400   // 24 hours — competition list rarely changes
 const EDGE_CACHE  = 's-maxage=86400, stale-while-revalidate=172800'
 
+// ✅ [Fix] Well-known competitions pinned to the top of the list.
+const POPULAR_LEAGUE_ORDER = ['WC', 'CL', 'PL', 'PD', 'BL1', 'SA', 'FL1', 'EC']
+
 export default async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
   res.setHeader('Access-Control-Allow-Origin',  allowedOrigin)
@@ -58,8 +61,19 @@ export default async function handler(req, res) {
         flag:       c.emblem || c.area?.flag || '',  // image URL — SeriesCard renders as <img> if it looks like a URL
         matchCount: undefined,
       }))
-      // Cup/league competitions first, alphabetical within that
-      .sort((a, b) => a.name.localeCompare(b.name))
+      // ✅ [Fix] Popular competitions (World Cup, Champions League, top
+      // European leagues) pinned to the top instead of pure alphabetical —
+      // users shouldn't have to scroll past "Campeonato Brasileiro" to
+      // find the World Cup.
+      .sort((a, b) => {
+        const rank = (id) => {
+          const i = POPULAR_LEAGUE_ORDER.indexOf(id)
+          return i === -1 ? POPULAR_LEAGUE_ORDER.length : i
+        }
+        const ra = rank(a.id), rb = rank(b.id)
+        if (ra !== rb) return ra - rb
+        return a.name.localeCompare(b.name)
+      })
 
     // ── 3. KV save (24hr) ─────────────────────────────
     await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })

@@ -1,50 +1,34 @@
 // FootballScoreCard.jsx — [Update #4] Teko font for score numbers
-// ✅ [Bug Fix] Wrapped with its own ErrorBoundary (CricketScoreCard already
-// had this, FootballScoreCard didn't) — previously if even one match in
-// the list had an unexpected data shape, the whole "Live Score Grid"
-// crashed for every match, because they all shared a single ErrorBoundary
-// one level up. Now each card fails independently.
 
-import ErrorBoundary from '../ui/ErrorBoundary.jsx'
-import { safeText }  from '../../utils/formatters.js'
-
-function FootballScoreCardInner({ match }) {
+export default function FootballScoreCard({ match }) {
   if (!match) return null
 
-  // ✅ [Bug Fix] String(...) coercion before parseInt — homeScore/awayScore
-  // could arrive as number, string, or null depending on API response
-  // shape; parseInt on a non-string/non-number could throw in edge cases.
-  const hScore = parseInt(String(match.homeScore ?? match.goals?.[0] ?? ''), 10)
-  const aScore = parseInt(String(match.awayScore ?? match.goals?.[1] ?? ''), 10)
-  const hWin = !match.isLive && !isNaN(hScore) && !isNaN(aScore) && hScore > aScore
-  const aWin = !match.isLive && !isNaN(hScore) && !isNaN(aScore) && aScore > hScore
+  const hScore = parseInt(match.homeScore ?? match.goals?.[0] ?? '')
+  const aScore = parseInt(match.awayScore ?? match.goals?.[1] ?? '')
+  const hasScore = !isNaN(hScore) && !isNaN(aScore)
+  const hWin = !match.isLive && hasScore && hScore > aScore
+  const aWin = !match.isLive && hasScore && aScore > hScore
 
-  // ✅ [Bug Fix — root cause of the football-only crash] Previously these
-  // were rendered directly as `{match.homeTeam}` etc. React hard-crashes
-  // if that value is ever an object instead of a string — which is exactly
-  // what allsportsapi2 returns for some fields (nested `{ name, ... }`
-  // shapes), while cricket-live-line1's fields happened to always be flat
-  // strings. safeText() guarantees a renderable string either way.
-  const homeTeam   = safeText(match.homeTeam, 'Home')
-  const awayTeam   = safeText(match.awayTeam, 'Away')
-  const tournament = safeText(match.tournament || match.league, 'Football')
-  const status     = safeText(match.status)
-  const minute     = safeText(match.minute)
+  // ✅ [Fix] Header badge previously always said "FT" for every non-live
+  // match, even ones that hadn't kicked off yet (SCHEDULED). Now it
+  // reflects the real status.
+  const isFinished = match.status === 'FINISHED'
+  const statusLabel = isFinished ? 'FT' : (match.status === 'POSTPONED' ? 'Postponed' : match.time || 'Upcoming')
 
   return (
     <div className="bg-brand-surface border border-brand-border rounded-xl p-5 flex flex-col gap-4 hover:border-white/20 transition-all">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-bold text-white/40 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full truncate max-w-[65%]">
-          {tournament}
+          {match.tournament || match.league || 'Football'}
         </span>
         {match.isLive ? (
           <span className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/25 text-green-400 text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0">
             <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-ping" />
-            {minute ? `${minute}'` : 'LIVE'}
+            {match.minute ? `${match.minute}'` : 'LIVE'}
           </span>
         ) : (
-          <span className="text-[10px] font-bold text-white/25 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full shrink-0">FT</span>
+          <span className="text-[10px] font-bold text-white/25 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full shrink-0">{statusLabel}</span>
         )}
       </div>
 
@@ -52,42 +36,44 @@ function FootballScoreCardInner({ match }) {
       <div className="flex items-center justify-between gap-3 py-1">
         <p className={`text-sm font-bold flex-1 truncate text-left leading-snug
           ${hWin ? 'text-white' : 'text-white/55'}`}>
-          {homeTeam}
+          {match.homeTeam}
         </p>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {/* [Update #4] Teko font — sporty score numbers */}
-          <span className={`font-sports text-5xl font-bold tabular-nums leading-none
-            ${hWin ? 'text-white' : 'text-white/50'}`}>
-            {isNaN(hScore) ? '—' : hScore}
-          </span>
-          <span className="font-sports text-3xl text-white/20 leading-none">:</span>
-          <span className={`font-sports text-5xl font-bold tabular-nums leading-none
-            ${aWin ? 'text-white' : 'text-white/50'}`}>
-            {isNaN(aScore) ? '—' : aScore}
-          </span>
-        </div>
+        {/* ✅ [Fix] "vs" instead of a large "— : —" for matches that
+            haven't started — the dash glyph at 5xl size in the sports
+            font rendered like a solid gray bar, looking like a broken
+            loading skeleton rather than "no score yet". */}
+        {hasScore || match.isLive ? (
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`font-sports text-5xl font-bold tabular-nums leading-none
+              ${hWin ? 'text-white' : 'text-white/50'}`}>
+              {isNaN(hScore) ? 0 : hScore}
+            </span>
+            <span className="font-sports text-3xl text-white/20 leading-none">:</span>
+            <span className={`font-sports text-5xl font-bold tabular-nums leading-none
+              ${aWin ? 'text-white' : 'text-white/50'}`}>
+              {isNaN(aScore) ? 0 : aScore}
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-0.5 shrink-0 px-2">
+            <span className="text-sm font-bold text-white/30 tracking-wide">vs</span>
+            {match.time && <span className="text-[10px] text-white/25">{match.time}</span>}
+          </div>
+        )}
 
         <p className={`text-sm font-bold flex-1 truncate text-right leading-snug
           ${aWin ? 'text-white' : 'text-white/55'}`}>
-          {awayTeam}
+          {match.awayTeam}
         </p>
       </div>
 
       {/* Status */}
-      {status && (
+      {match.status && (
         <div className="pt-3 border-t border-brand-border">
-          <p className="text-[11px] text-center text-white/30 font-medium truncate">{status}</p>
+          <p className="text-[11px] text-center text-white/30 font-medium truncate">{match.date ? `${match.date}${match.status !== 'FINISHED' ? ` · ${match.status}` : ''}` : match.status}</p>
         </div>
       )}
     </div>
-  )
-}
-
-export default function FootballScoreCard(props) {
-  return (
-    <ErrorBoundary label="Football Score Card">
-      <FootballScoreCardInner {...props} />
-    </ErrorBoundary>
   )
 }
