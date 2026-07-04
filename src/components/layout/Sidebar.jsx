@@ -64,7 +64,7 @@ export default function Sidebar() {
       {/* Telegram CTA */}
       <div className="mt-auto px-4">
         <a
-          href="https://t.me/streamvex"
+          href="https://t.me/jihad_9920"
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 transition-all group"
