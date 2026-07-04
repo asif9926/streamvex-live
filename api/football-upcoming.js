@@ -72,6 +72,15 @@ export default async function handler(req, res) {
   const leagueParam = (req.query.league || '').toUpperCase()
   const aggregateAll = !leagueParam || leagueParam === 'ALL'
 
+  // ✅ [Debug aid] ?nocache=1 skips the KV read and forces a fresh fetch —
+  // handy for verifying a deploy directly from the browser:
+  // /api/football-upcoming?nocache=1
+  const bypassCache = req.query.nocache === '1' || req.query.nocache === 'true'
+  // ✅ Single source of truth — every success path below uses this instead
+  // of EDGE_CACHE directly, so ?nocache=1 always guarantees a true
+  // no-store response (useful for verifying a deploy from the browser).
+  const successCacheHeader = bypassCache ? 'no-store' : EDGE_CACHE
+
   if (!process.env.FOOTBALL_DATA_API_KEY) {
     return res.status(503).json({ error: 'FOOTBALL_DATA_API_KEY not configured' })
   }
@@ -86,9 +95,9 @@ export default async function handler(req, res) {
 
     const cacheKey = `football-upcoming:${leagueParam}`
     try {
-      const cached = await kv.get(cacheKey)
+      const cached = bypassCache ? null : await kv.get(cacheKey)
       if (cached) {
-        res.setHeader('Cache-Control', EDGE_CACHE)
+        res.setHeader('Cache-Control', successCacheHeader)
         return res.status(200).json({ source: 'cache', data: cached._data || cached })
       }
 
@@ -97,8 +106,13 @@ export default async function handler(req, res) {
         .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate))
         .map(m => mapMatch(m, leagueParam))
 
-      await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
-      res.setHeader('Cache-Control', EDGE_CACHE)
+      // ✅ [Fix] Same empty-result caching issue as the aggregate branch below.
+      if (data.length > 0) {
+        await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
+        res.setHeader('Cache-Control', successCacheHeader)
+      } else {
+        res.setHeader('Cache-Control', 'no-store')
+      }
       return res.status(200).json({ source: 'api', data })
     } catch (error) {
       console.error('[football-upcoming] Error:', error.message)
@@ -107,11 +121,14 @@ export default async function handler(req, res) {
   }
 
   // ── ✅ [Fix] Aggregate across ALL major leagues ──────────────────
-  const cacheKey = 'football-upcoming:all:v1'
+  // ✅ [Fix] Bumped to v2 — immediately busts the current stuck-empty
+  // cache from before this fix (old key would otherwise sit cached at
+  // the Vercel edge for up to 6 more hours regardless of this deploy).
+  const cacheKey = 'football-upcoming:all:v2'
   try {
-    const cached = await kv.get(cacheKey)
+    const cached = bypassCache ? null : await kv.get(cacheKey)
     if (cached) {
-      res.setHeader('Cache-Control', EDGE_CACHE)
+      res.setHeader('Cache-Control', successCacheHeader)
       return res.status(200).json({ source: 'cache', data: cached._data || cached })
     }
 
@@ -126,8 +143,19 @@ export default async function handler(req, res) {
     // Cap the list — no one needs 200 fixtures from 10 leagues merged.
     const data = merged.slice(0, 40)
 
-    await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
-    res.setHeader('Cache-Control', EDGE_CACHE)
+    // ✅ [Fix] Only cache (KV + edge) when we actually got results. Every
+    // league can occasionally 429/timeout at once (e.g. right after a
+    // burst of manual testing) — caching an empty result for 6 hours at
+    // the Vercel edge froze the Upcoming tab empty long after the league
+    // APIs had recovered. An empty result now falls through with
+    // no-store, so the very next request tries fresh instead of hitting
+    // a stale "no matches" edge cache.
+    if (data.length > 0) {
+      await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
+      res.setHeader('Cache-Control', successCacheHeader)
+    } else {
+      res.setHeader('Cache-Control', 'no-store')
+    }
     return res.status(200).json({ source: 'api', data })
 
   } catch (error) {
@@ -135,7 +163,7 @@ export default async function handler(req, res) {
     try {
       const stale = await kv.get(cacheKey)
       if (stale) {
-        res.setHeader('Cache-Control', EDGE_CACHE)
+        res.setHeader('Cache-Control', successCacheHeader)
         return res.status(200).json({ source: 'stale_cache', data: stale._data || stale })
       }
     } catch {}
