@@ -1,22 +1,26 @@
-// [Update #6] AIChatPanel.jsx — AI Match Analyst powered by Groq
+// [Update #7] AIChatPanel.jsx — AI Match Analyst powered by Groq
 // ✅ [Fix] conversation history এখন API-তে পাঠানো হয় → multi-turn chat কাজ করে
-// ✅ [Bug Fix] Previous "suggestion chips" sent generic questions like
-// "কে এগিয়ে আছে এখন?" against ALL live matches bundled together as
-// context — with more than one live match, the AI had no way to know
-// which match the person actually meant, so answers felt like it "didn't
-// understand." Fixed by replacing generic suggestions with an explicit
-// MATCH PICKER: the person taps which live match they mean first, and
-// only THAT match's data is sent as context from then on — every
-// question is now unambiguous.
-// ✅ [Premium/scope upgrade] The AI was hard-restricted to only the live
-// score JSON ("Never make up specific statistics — only use the data
-// provided"), so it couldn't answer anything outside that narrow slice
-// (e.g. "who might get Man of the Match", squad questions). The backend
-// prompt now explicitly allows general cricket/football knowledge for
-// things live-score data doesn't cover, while staying honest about the
-// difference between "confirmed from live data" and "general knowledge."
+// ✅ [Bug Fix] "suggestion chips" used to send generic questions against
+// ALL live matches bundled together — the AI couldn't tell which match
+// was meant. Replaced with an explicit match picker so every question is
+// scoped to one specific match.
+// ✅ [Premium/scope upgrade] Backend now allows general cricket/football
+// knowledge (squads, Man-of-the-Match analysis, history) alongside the
+// live data, instead of being hard-restricted to only the score JSON.
+// ✅ [Critical UX Fix] The match picker previously rendered EVERY live
+// match (this API can return 40-50+ minor-league fixtures) as an
+// unbounded grid, which completely buried the actual Live Score cards —
+// the whole point of this page — below a wall of AI-picker buttons.
+// Fixed with two changes:
+//   1. The panel is now COLLAPSED by default — a single compact bar.
+//      Score cards are the first thing visible on the page again; the AI
+//      feature is one tap away for anyone who wants it, not forced on
+//      everyone who just wants to check scores.
+//   2. When expanded, the match list is a SEARCHABLE, height-capped,
+//      scrollable list (not a page-length grid) — it can hold 50 matches
+//      without ever pushing surrounding content around.
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 
 const SUGGESTIONS = [
   'কে এগিয়ে আছে এখন?',
@@ -39,12 +43,24 @@ function describeMatch(match) {
 }
 
 export default function AIChatPanel({ matchContext }) {
-  const liveMatches = Array.isArray(matchContext) ? matchContext : (matchContext ? [matchContext] : [])
+  // ✅ [Lint Fix] Memoized so this has a stable reference across renders
+  // (avoids the array literal `matchContext ? [matchContext] : []` being
+  // treated as "always new" by the filteredMatches useMemo below).
+  const liveMatches = useMemo(
+    () => (Array.isArray(matchContext) ? matchContext : (matchContext ? [matchContext] : [])),
+    [matchContext]
+  )
 
-  const [selectedMatch, setSelectedMatch] = useState(liveMatches.length === 1 ? liveMatches[0] : null)
-  const [messages, setMessages] = useState([])
-  const [input, setInput]       = useState('')
-  const [loading, setLoading]   = useState(false)
+  // ✅ [UX Fix] Collapsed by default — this used to auto-render (and with
+  // one match, auto-select it) every time the page loaded, forcing the AI
+  // panel's full height on everyone. Now it only opens when someone
+  // actually wants it.
+  const [expanded, setExpanded]           = useState(false)
+  const [selectedMatch, setSelectedMatch] = useState(null)
+  const [matchSearch, setMatchSearch]     = useState('')
+  const [messages, setMessages]           = useState([])
+  const [input, setInput]                 = useState('')
+  const [loading, setLoading]             = useState(false)
   const scrollRef = useRef(null)
 
   // নতুন message এলে auto-scroll
@@ -53,6 +69,17 @@ export default function AIChatPanel({ matchContext }) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages])
+
+  // ✅ [UX Fix] Filter matches by team/tournament name so a 50-match list
+  // is actually usable instead of endless scrolling.
+  const filteredMatches = useMemo(() => {
+    const described = liveMatches.map((m, i) => ({ match: m, i, ...describeMatch(m) }))
+    if (!matchSearch.trim()) return described
+    const q = matchSearch.trim().toLowerCase()
+    return described.filter(({ label, sub }) =>
+      label.toLowerCase().includes(q) || sub.toLowerCase().includes(q)
+    )
+  }, [liveMatches, matchSearch])
 
   const sendMessage = async (overrideText) => {
     const question = (overrideText ?? input).trim()
@@ -70,9 +97,6 @@ export default function AIChatPanel({ matchContext }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question,
-          // ✅ [Bug Fix] Only the ONE selected match now — not every live
-          // match bundled together — so the AI always knows exactly which
-          // match is being discussed.
           matchContext: selectedMatch,
           history: messages.map(m => ({
             role:    m.role === 'user' ? 'user' : 'assistant',
@@ -92,10 +116,41 @@ export default function AIChatPanel({ matchContext }) {
   }
 
   const clearChat   = () => setMessages([])
-  const changeMatch = () => { setSelectedMatch(null); setMessages([]) }
+  const changeMatch = () => { setSelectedMatch(null); setMessages([]); setMatchSearch('') }
+  const collapse    = () => setExpanded(false)
 
   const selected = selectedMatch ? describeMatch(selectedMatch) : null
 
+  // ── Collapsed state: one compact bar, tap to open ─────
+  if (!expanded) {
+    return (
+      <button
+        onClick={() => setExpanded(true)}
+        className="w-full flex items-center justify-between gap-3 bg-brand-surface border border-brand-blue/25 rounded-2xl px-4 py-3 mb-5 hover:border-brand-blue/40 transition-all group"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br from-brand-blue to-purple-500 flex items-center justify-center text-[11px] font-black text-white shadow-lg shadow-brand-blue/20">
+            AI
+          </span>
+          <div className="min-w-0 text-left">
+            <p className="text-sm font-bold text-white flex items-center gap-2">
+              AI Match Analyst
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-to-r from-brand-blue/20 to-purple-500/20 text-brand-blue border border-brand-blue/25 uppercase tracking-wider">
+                Pro
+              </span>
+            </p>
+            <p className="text-[11px] text-white/35 truncate">যেকোনো ম্যাচ, স্কোয়াড বা খেলোয়াড় নিয়ে প্রশ্ন করুন</p>
+          </div>
+        </div>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+          className="w-4 h-4 text-white/30 group-hover:text-white/60 shrink-0 transition-colors">
+          <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+        </svg>
+      </button>
+    )
+  }
+
+  // ── Expanded state ─────────────────────────────────────
   return (
     <div className="relative bg-brand-surface border border-brand-blue/25 rounded-2xl p-4 mb-5 overflow-hidden">
       {/* Subtle glow — premium/featured feel */}
@@ -117,39 +172,61 @@ export default function AIChatPanel({ matchContext }) {
             <p className="text-[11px] text-white/35 mt-0.5">
               {selectedMatch
                 ? 'ম্যাচ, দল, খেলোয়াড় — যেকোনো প্রশ্ন করুন'
-                : 'শুরু করতে নিচে থেকে একটা ম্যাচ বেছে নিন'}
+                : 'নিচে থেকে একটা ম্যাচ বেছে নিন'}
             </p>
           </div>
         </div>
-        {messages.length > 0 && (
-          <button
-            onClick={clearChat}
-            className="text-[10px] text-white/25 hover:text-white/50 transition-colors shrink-0 mt-1"
-          >
-            Clear
+        <div className="flex items-center gap-3 shrink-0 mt-1">
+          {messages.length > 0 && (
+            <button onClick={clearChat} className="text-[10px] text-white/25 hover:text-white/50 transition-colors">
+              Clear
+            </button>
+          )}
+          {/* ✅ [UX Fix] Minimize — always available so the score grid below
+              never stays hidden longer than the person wants. */}
+          <button onClick={collapse} aria-label="Minimize" className="text-white/25 hover:text-white/50 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M14.78 11.78a.75.75 0 0 1-1.06 0L10 8.06l-3.72 3.72a.75.75 0 1 1-1.06-1.06l4.25-4.25a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06Z" clipRule="evenodd" />
+            </svg>
           </button>
-        )}
+        </div>
       </div>
 
-      {/* ── Match picker (shown until a match is selected) ── */}
+      {/* ── Match picker (shown until a match is selected) ──
+          ✅ [UX Fix] Height-capped + scrollable + searchable — holds 50
+          matches without ever growing past ~4 rows of visible height,
+          so it can never push the score grid out of view. */}
       {!selectedMatch && (
-        <div className="relative mt-3 flex flex-wrap gap-2">
-          {liveMatches.map((match, i) => {
-            const { label, sub } = describeMatch(match)
-            return (
+        <div className="relative mt-3">
+          {liveMatches.length > 6 && (
+            <input
+              type="text"
+              value={matchSearch}
+              onChange={e => setMatchSearch(e.target.value)}
+              placeholder="দল বা লিগের নাম দিয়ে খুঁজুন..."
+              className="w-full mb-2 bg-brand-elevated text-white text-xs rounded-lg px-3 py-2
+                border border-brand-border focus:outline-none focus:border-brand-blue
+                transition-colors placeholder-white/20"
+            />
+          )}
+          <div className="max-h-56 overflow-y-auto pr-1 flex flex-col gap-1.5 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-brand-border">
+            {filteredMatches.length === 0 && (
+              <p className="text-xs text-white/25 text-center py-4">কোনো ম্যাচ পাওয়া যায়নি।</p>
+            )}
+            {filteredMatches.map(({ match, i, label, sub }) => (
               <button
                 key={match.id ?? i}
                 onClick={() => setSelectedMatch(match)}
-                className="flex items-center gap-2 text-left px-3 py-2 rounded-xl bg-brand-elevated border border-brand-border hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-all"
+                className="flex items-center gap-2 text-left px-3 py-2 rounded-lg bg-brand-elevated border border-brand-border hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-all"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0 animate-pulse" />
                 <span className="min-w-0">
-                  <span className="block text-xs font-semibold text-white/80 truncate max-w-[220px]">{label}</span>
-                  {sub && <span className="block text-[10px] text-white/30 truncate max-w-[220px]">{sub}</span>}
+                  <span className="block text-xs font-semibold text-white/80 truncate">{label}</span>
+                  {sub && <span className="block text-[10px] text-white/30 truncate">{sub}</span>}
                 </span>
               </button>
-            )
-          })}
+            ))}
+          </div>
         </div>
       )}
 
