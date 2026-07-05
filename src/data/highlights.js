@@ -30,8 +30,8 @@ const highlights = [
   },
   {
     id:         2,
-    title:      'টপ ৫ বেস্ট ক্যাচ — এই সিরিজের',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    title:      'World Cup Rematch: Portugal 3-3 Spain | 2018 Masterclass',
+    youtubeUrl: 'https://www.youtube.com/watch?v=ZbM-tVTnRO8',
     addedDate:  '2026-06-25',
   },
   {
@@ -42,9 +42,9 @@ const highlights = [
   },
   {
     id:         4,
-    title:      'প্লেয়ার স্কিলস: ফ্রি-কিক মাস্টারক্লাস',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    addedDate:  '2026-07-02',
+    title:      'Highlights | Paraguay vs France | Match 90 | Round of 16 | FIFA World Cup 2026™',
+    youtubeUrl: 'https://www.youtube.com/watch?v=Lpz3nOGqwGE',
+    addedDate:  '2026-07-05',
   },
 ]
 
