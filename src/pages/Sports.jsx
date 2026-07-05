@@ -3,6 +3,7 @@
 // Hooks: useChannelStore (getFilteredChannels, setSubcategory)
 // Components: ChannelGrid, ChannelFilter, SectionHeader, PageMeta
 
+import { useEffect }        from 'react'
 import { useChannelStore }  from '../store/channelStore.js'
 import { useSearch }        from '../hooks/useSearch.js'
 import ChannelGrid          from '../components/channels/ChannelGrid.jsx'
@@ -17,6 +18,16 @@ const SUBCATEGORIES = ['All', 'Cricket', 'Football', 'Motorsport', 'Boxing', 'Te
 export default function Sports() {
   const { query, setQuery, filteredChannels, activeSubcategory, setSubcategory } = useSearch()
   const searchQuery = useChannelStore(s => s.searchQuery)
+
+  // ⚠️ [Bug Fix] Same class of bug as the tab-switch scroll fix — clicking a
+  // category pill (Cricket/Football/…) re-filters in place without a route
+  // change, so a person scrolled deep into "All" can click "Boxing" (often
+  // just 1-2 channels) and stay stuck scrolled past the now-short grid.
+  // Keyed on activeSubcategory only — NOT on `query` — so typing in the
+  // search box never yanks the scroll position on every keystroke.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+  }, [activeSubcategory])
 
   return (
     <>

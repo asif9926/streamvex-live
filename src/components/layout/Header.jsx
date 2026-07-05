@@ -114,7 +114,7 @@ export default function Header() {
 const NAV_LINKS = [
   { to: '/', label: 'Home', icon: <HomeIcon /> },
   { to: '/sports', label: 'Sports Channels', icon: <SportsIcon /> },
-  { to: '/bangladesh-tv', label: 'Bangladesh TV', icon: <BdIcon /> },
+  { to: '/highlights', label: 'Highlights', icon: <VideoIcon /> },
   { to: '/tournament', label: 'Tournament', icon: <TournamentIcon /> },
   { to: '/live-score',  label: 'Live Scores', icon: <LiveIcon /> },
   { to: '/favorites', label: 'My Favorites', icon: <StarIcon /> },
@@ -129,6 +129,10 @@ function SportsIcon() {
 }
 function BdIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-1.5 0a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z" clipRule="evenodd" /></svg>
+}
+// ✅ used by Header's mobile "Highlights" nav link
+function VideoIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M4.5 4.5a3 3 0 0 0-3 3v5a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-5a3 3 0 0 0-3-3h-6ZM15.75 6.5a.75.75 0 0 1 .75-.688l2.5.5A.75.75 0 0 1 20 7.036v5.928a.75.75 0 0 1-1 .724l-2.5-.5a.75.75 0 0 1-.75-.688V6.5Z" clipRule="evenodd" /></svg>
 }
 function TournamentIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M10 1c-1.828 0-3.623.149-5.371.435a.75.75 0 0 0-.629.74v.387c-.827.157-1.642.345-2.445.564a.75.75 0 0 0-.552.698 5 5 0 0 0 4.503 5.152 6 6 0 0 0 2.946 1.822A6.451 6.451 0 0 1 7.768 13H7.5A1.5 1.5 0 0 0 6 14.5V17h-.75C4.56 17 4 17.56 4 18.25v.75h12v-.75c0-.69-.56-1.25-1.25-1.25H14v-2.5a1.5 1.5 0 0 0-1.5-1.5h-.268a6.453 6.453 0 0 1-.684-2.202 6 6 0 0 0 2.946-1.822 5 5 0 0 0 4.503-5.152.75.75 0 0 0-.552-.698A31.804 31.804 0 0 0 16 2.562v-.387a.75.75 0 0 0-.629-.74A33.227 33.227 0 0 0 10 1ZM2.525 4.422C3.012 4.3 3.504 4.19 4 4.09V5c0 .74.134 1.448.38 2.103a3.503 3.503 0 0 1-1.855-2.68Zm14.95 0a3.503 3.503 0 0 1-1.854 2.68C15.866 6.449 16 5.74 16 5v-.91c.496.099.988.21 1.475.332Z" clipRule="evenodd" /></svg>

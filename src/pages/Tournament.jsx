@@ -3,7 +3,7 @@
 // Hooks: useSeries, useMatchResults, useUpcoming, useSeriesMatches
 // Components: TournamentTabs, SeriesList, MatchResultCard, UpcomingMatchCard, PageMeta
 
-import { useState }                 from 'react'
+import { useState, useEffect }                 from 'react'
 import { motion, AnimatePresence }  from 'framer-motion'
 import { useSeries }                from '../hooks/useSeries.js'
 import { useFootballLeagues }       from '../hooks/useFootballLeagues.js'
@@ -35,6 +35,15 @@ export default function Tournament() {
   const [sport,  setSport]  = useState('cricket')
   const [subTab, setSubTab] = useState('series')
 
+  // ⚠️ [Bug Fix] Same class of bug as the route-level ScrollToTop fix —
+  // switching Cricket/Football or Series/Results/Upcoming is an in-page
+  // state change, not a URL change, so it never goes through that fix.
+  // Series lists can be long; Results/Upcoming can be short or empty —
+  // without this, tapping a tab while scrolled down leaves the view stuck
+  // mid-page (or past the end) of the newly-shown, differently-sized content.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+  }, [sport, subTab])
 
   // Reset subTab when sport changes
   const handleSportChange = (s) => {

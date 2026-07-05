@@ -70,14 +70,38 @@ export function useSearch(debounceMs = 250) {
  */
 export function useBdSearch() {
   const bdChannels        = useChannelStore(s => s.bdChannels)
-  const [query, setLocalQuery]     = useState('')
+  // ⚠️ [Bug Fix — Critical] This hook used to be 100% local state, with
+  // zero connection to the global store. Header.jsx's search bar writes
+  // to store.searchQuery and deliberately does NOT navigate away when
+  // already on /bangladesh-tv (see Header.jsx handleSearch) — it assumed
+  // this page would pick up that value like Sports.jsx's useSearch() does.
+  // It never did, so searching from the Header while on this page was a
+  // silent no-op: type, hit enter, nothing happens. Now synced both ways —
+  // same pattern useSearch() already uses for the Sports page.
+  const storeSearchQuery  = useChannelStore(s => s.searchQuery)
+  const setStoreSearch    = useChannelStore(s => s.setSearch)
+
+  const [query, setLocalQuery]     = useState(storeSearchQuery)
   const [activeFilter, setFilter]  = useState('All')
 
-  const setQuery = useCallback(
-    (value) => setLocalQuery(typeof value === 'string' ? value : value?.target?.value ?? ''),
-    []
-  )
-  const clearQuery     = useCallback(() => setLocalQuery(''), [])
+  // Store → local: catches Header-bar searches typed while already here
+  useEffect(() => {
+    setLocalQuery(storeSearchQuery)
+  }, [storeSearchQuery])
+
+  // Local → store: typing in THIS page's own filter bar also keeps the
+  // Header's search input in sync, same as the Sports page.
+  const setQuery = useCallback((value) => {
+    const v = typeof value === 'string' ? value : value?.target?.value ?? ''
+    setLocalQuery(v)
+    setStoreSearch(v)
+  }, [setStoreSearch])
+
+  const clearQuery = useCallback(() => {
+    setLocalQuery('')
+    setStoreSearch('')
+  }, [setStoreSearch])
+
   const setActiveFilter = useCallback((f) => setFilter(f), [])
 
   // BD channels filter — useMemo দিয়ে unnecessary recalculation বন্ধ

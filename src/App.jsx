@@ -4,7 +4,8 @@
 // Routes (matches Sidebar.jsx + Header.jsx links exactly):
 //   /                  → Home
 //   /sports            → Sports (channel grid + search/filter)
-//   /bangladesh-tv      → BangladeshiTV
+//   /bangladesh-tv      → BangladeshiTV (kept live at this URL, just removed from nav)
+//   /highlights        → Highlights (YouTube highlight videos)
 //   /live-score        → LiveScore (cricket/football live scores)
 //   /tournament        → Tournament (series, results, upcoming)
 //   /favorites         → Favorites
@@ -24,6 +25,7 @@ import Header   from './components/layout/Header.jsx'
 import Sidebar  from './components/layout/Sidebar.jsx'
 import Footer   from './components/layout/Footer.jsx'
 import ErrorBoundary from './components/ui/ErrorBoundary.jsx'
+import ScrollToTop   from './components/ui/ScrollToTop.jsx'
 import { SkeletonCard } from './components/ui/Skeleton.jsx'
 
 // ✅ [Perf Fix] Route-level code splitting — previously every page
@@ -35,6 +37,7 @@ import { SkeletonCard } from './components/ui/Skeleton.jsx'
 import Home from './pages/Home.jsx'
 const Sports        = lazy(() => import('./pages/Sports.jsx'))
 const BangladeshiTV  = lazy(() => import('./pages/BangladeshiTV.jsx'))
+const Highlights      = lazy(() => import('./pages/Highlights.jsx'))
 const LiveScore       = lazy(() => import('./pages/LiveScore.jsx'))
 const Tournament       = lazy(() => import('./pages/Tournament.jsx'))
 const Favorites          = lazy(() => import('./pages/Favorites.jsx'))
@@ -60,6 +63,7 @@ export default function App() {
   if (isWatchPage) {
     return (
       <ErrorBoundary label="App">
+        <ScrollToTop />
         <Suspense fallback={<div className="min-h-screen bg-brand-bg" />}>
           <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>
@@ -73,6 +77,7 @@ export default function App() {
 
   return (
     <ErrorBoundary label="App">
+      <ScrollToTop />
       <Header />
 
       <div className="flex flex-1 pt-16">
@@ -85,13 +90,22 @@ export default function App() {
               last section had bottom margin, so content butted directly
               against the footer everywhere, not just on Home. Fixing it
               once here covers every route consistently. */}
-          <div className="pb-10">
+          {/* ⚠️ [Bug Fix] Every page except About/Watch had ZERO horizontal
+              padding here — content ran edge-to-edge against the raw
+              viewport (mobile) or the content-area edge next to Sidebar
+              (desktop). `max-w-content` (tailwind.config.js) and
+              `.page-container` (index.css) were both already defined for
+              exactly this purpose but never actually applied anywhere.
+              Wiring them in here fixes every route at once, the same way
+              pb-10 below was already centralized instead of per-page. */}
+          <div className="pb-10 px-4 sm:px-6 lg:px-8 max-w-content mx-auto">
             <Suspense fallback={<PageFallback />}>
               <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
                   <Route path="/"              element={<Home />} />
                   <Route path="/sports"        element={<Sports />} />
                   <Route path="/bangladesh-tv" element={<BangladeshiTV />} />
+                  <Route path="/highlights"    element={<Highlights />} />
                   <Route path="/live-score"    element={<LiveScore />} />
                   <Route path="/tournament"    element={<Tournament />} />
                   <Route path="/favorites"     element={<Favorites />} />

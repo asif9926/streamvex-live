@@ -17,15 +17,17 @@ const FOOTBALL_API  = 'https://allsportsapi2.p.rapidapi.com/api/matches/live'
 const CRICKET_HOST  = 'cricket-live-line1.p.rapidapi.com'
 const FOOTBALL_HOST = 'allsportsapi2.p.rapidapi.com'
 
-const CACHE_TTL = 90   // seconds — KV TTL
-// ✅ [Update #1] Edge Cache: Vercel Edge Network নিজেই ক্যাশ করবে
-//    Browser → Edge Cache (90s) → KV → API
-//    Edge hit হলে KV বা API-তে কোনো request-ই যাবে না
-const EDGE_CACHE = 's-maxage=90, stale-while-revalidate=120'
+// ⚠️ [Fix] 90s ছিল আগে — cricket-live-line1 এর 100 req/day free-tier limit
+// এর সাথে সাংঘর্ষিক। একটা লাইভ ম্যাচ ৬-৮ ঘণ্টা চললেই 90s TTL এ
+// (6×3600)/90 = 240+ calls/day লাগে, যা quota-র ২.৪ গুণ। 300s (5 min)
+// এ নামিয়ে আনলে সেই একই ৮ ঘণ্টায় মাত্র ~96 calls লাগে — নিরাপদ margin
+// সহ quota-র মধ্যে থাকে, match-results.js এর জন্য জায়গাও থাকে।
+const CACHE_TTL = 300   // seconds — KV TTL (5 min)
+const EDGE_CACHE = 's-maxage=300, stale-while-revalidate=600'
 
 export default async function handler(req, res) {
   // CORS — same origin only (Vercel rewrite করে)
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
   res.setHeader('Vary', 'Origin')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')

@@ -43,7 +43,7 @@ async function fetchMatches(competitionId, status, authToken) {
 
 export default async function handler(req, res) {
   // ✅ [Fix] CORS locked to own domain
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex.live'
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
   res.setHeader('Access-Control-Allow-Origin',  allowedOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Vary', 'Origin')

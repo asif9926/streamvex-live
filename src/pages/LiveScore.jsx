@@ -3,7 +3,7 @@
 // Hooks: useLiveScores (SWR, [Update #2] tab-visibility)
 // Components: ScoreGrid, ScoreSkeleton, Tabs, SectionHeader, PageMeta
 
-import { useState }         from 'react'
+import { useState, useEffect }         from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLiveScores }    from '../hooks/useLiveScores.js'
 import PageMeta             from '../components/ui/PageMeta.jsx'
@@ -23,6 +23,16 @@ const SPORT_TABS = [
 
 export default function LiveScoring() {
   const [sport, setSport] = useState('cricket')
+
+  // ⚠️ [Bug Fix] Switching Cricket ↔ Football is an in-page state change,
+  // not a route navigation, so the app-level ScrollToTop (which only fires
+  // on URL change) never runs here. Without this, a person scrolled deep
+  // into a long Cricket list who then taps Football (often a much shorter
+  // or empty list) stays scrolled at that same pixel position — looking at
+  // blank space or mid-content instead of the top of the new tab.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+  }, [sport])
 
   const {
     liveMatches,

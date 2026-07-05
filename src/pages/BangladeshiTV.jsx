@@ -3,6 +3,7 @@
 // Hooks: useBdSearch (search + filter + subcategories dynamic)
 // Components: ChannelGrid, ChannelFilter, SectionHeader, PageMeta
 
+import { useEffect }    from 'react'
 import { useBdSearch }  from '../hooks/useSearch.js'
 import ChannelGrid      from '../components/channels/ChannelGrid.jsx'
 import ChannelFilter    from '../components/channels/ChannelFilter.jsx'
@@ -19,6 +20,14 @@ export default function BangladeshiTV() {
     bdSubcategories,
     resultCount,
   } = useBdSearch()
+
+  // ⚠️ [Bug Fix] Same fix as Sports.jsx — category pill click re-filters in
+  // place (no route change), so scroll position can get stuck past a much
+  // shorter filtered grid. Keyed on activeFilter only, not `query`, so
+  // typing in the search box doesn't cause scroll jumps.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+  }, [activeFilter])
 
   const liveCount = filteredBdChannels.filter(c => c.isLive).length
 

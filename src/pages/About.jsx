@@ -38,7 +38,7 @@ const DEVELOPER = {
     {
       name: 'Portfolio',
       // 🔧 TODO: নিজের পোর্টফোলিও ওয়েবসাইট লিংক বসান
-      url:  'https://github.com/asif9926',
+      url:  'https://twille.vercel.app/',
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
           <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 0 0-5.25 5.25v3a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3v-6a3 3 0 0 0-3-3v-3c0-2.9-2.35-5.25-5.25-5.25Zm3.75 8.25v-3a3.75 3.75 0 1 0-7.5 0v3h7.5Z" clipRule="evenodd" />
@@ -48,7 +48,7 @@ const DEVELOPER = {
     {
       name: 'Facebook',
       // 🔧 TODO: নিজের Facebook প্রোফাইল/পেজ লিংক বসান
-      url:  'https://www.facebook.com/asif99.F',
+      url:  'https://www.facebook.com/tahmid.haque.9',
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
           <path fillRule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12Z" clipRule="evenodd" />
@@ -281,7 +281,7 @@ export default function About() {
     <>
       <PageMeta title="About — StreamVex Live" />
 
-      <div className="p-4 xl:p-6 max-w-3xl mx-auto">
+      <div className="max-w-3xl mx-auto">{/* ⚠️ [Bug Fix] Removed p-4 xl:p-6 — now double-padded with the global page-container padding added in App.jsx */}
 
         <motion.div {...fadeUp(0)} className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
           {HIGHLIGHTS.map(h => (
@@ -294,7 +294,7 @@ export default function About() {
         </motion.div>
 
         <motion.div {...fadeUp(0.05)}>
-          <SectionHeader title="যিনি বানিয়েছেন" subtitle="Developer" />
+          <SectionHeader title="Behind the Project" subtitle="Developer" />
           <div className="bg-brand-surface border border-brand-border rounded-2xl p-6 sm:p-8 mb-8">
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-red to-red-700 flex items-center justify-center text-3xl font-black text-white shrink-0 shadow-lg shadow-brand-red/20">

@@ -89,14 +89,14 @@ export default function Watch() {
         <meta property="og:site_name"   content="StreamVex" />
         <meta property="og:title"       content={`${channel.currentMatch || channel.name} — Live on StreamVex`} />
         <meta property="og:description" content={`Watch ${channel.name} live on StreamVex. ${channel.currentMatch || 'Live sports streaming in HD.'}`} />
-        <meta property="og:image"       content={channel.logo || 'https://streamvex.live/og-default.png'} />
+        <meta property="og:image"       content={channel.logo || 'https://streamvex-live.vercel.app/og-default.png'} />
         <meta property="og:image:width"  content="1200" />
         <meta property="og:image:height" content="630" />
-        <meta property="og:url"         content={`https://streamvex.live/watch/${channel.id}`} />
+        <meta property="og:url"         content={`https://streamvex-live.vercel.app/watch/${channel.id}`} />
         <meta name="twitter:card"        content="summary_large_image" />
         <meta name="twitter:title"       content={`${channel.currentMatch || channel.name} — Live on StreamVex`} />
         <meta name="twitter:description" content={`Watch ${channel.name} live on StreamVex.`} />
-        <meta name="twitter:image"       content={channel.logo || 'https://streamvex.live/og-default.png'} />
+        <meta name="twitter:image"       content={channel.logo || 'https://streamvex-live.vercel.app/og-default.png'} />
       </Helmet>
 
       {/* ── Top Nav ── */}

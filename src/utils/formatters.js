@@ -132,6 +132,48 @@ export function formatTime(seconds) {
 }
 
 // ─────────────────────────────────────────────────────
+// YOUTUBE
+// ─────────────────────────────────────────────────────
+
+/**
+ * getYouTubeId — যেকোনো ফরম্যাটের YouTube URL থেকে video ID বের করো
+ *
+ * Supports: watch?v=, youtu.be/, shorts/, embed/
+ *
+ * @example
+ * getYouTubeId('https://www.youtube.com/watch?v=dQw4w9WgXcQ') // → 'dQw4w9WgXcQ'
+ * getYouTubeId('https://youtu.be/dQw4w9WgXcQ')                // → 'dQw4w9WgXcQ'
+ */
+export function getYouTubeId(url = '') {
+  if (!url) return ''
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtube\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+  ]
+  for (const re of patterns) {
+    const match = url.match(re)
+    if (match) return match[1]
+  }
+  return ''
+}
+
+/**
+ * getYouTubeThumbnail — video ID থেকে thumbnail image URL বানাও
+ * hqdefault সবসময় থাকে (maxresdefault অনেক পুরনো/কম-ভিউ ভিডিওতে না-ও থাকতে পারে)
+ */
+export function getYouTubeThumbnail(videoId) {
+  if (!videoId) return ''
+  return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+}
+
+/**
+ * getYouTubeEmbedUrl — video ID থেকে embeddable player URL বানাও
+ */
+export function getYouTubeEmbedUrl(videoId, { autoplay = true } = {}) {
+  if (!videoId) return ''
+  return `https://www.youtube.com/embed/${videoId}?autoplay=${autoplay ? 1 : 0}&rel=0`
+}
+
+// ─────────────────────────────────────────────────────
 // CRICKET
 // ─────────────────────────────────────────────────────
 

@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom'
 
-// 🔧 TODO: number format যাচাই করে নিন — wa.me লিংকে country code সহ,
-// leading zero ছাড়া লাগে (যেমন বাংলাদেশ +880 হলে: 8801253552585)।
-// আপাতত আপনার দেওয়া নাম্বারটাই বসানো আছে।
-const WHATSAPP_NUMBER = '011253552585'
+// ⚠️ [Bug — needs YOUR input] This number is in the WRONG format for a
+// wa.me link. wa.me requires: country code + number, NO leading zero,
+// NO '+', NO spaces/dashes.
+//   Wrong (current): 011253552585   ← leading 0, no country code — broken link
+//   Right (Bangladesh +880 example): 8801253552585
+// Replace the line below with YOUR real number in that exact format.
+const WHATSAPP_NUMBER = '+8801710256453'   // 🔴 FIX ME — see comment above
 const WHATSAPP_LINK   = `https://wa.me/${WHATSAPP_NUMBER}`
 
 const NAV_LINKS = [
