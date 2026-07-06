@@ -98,7 +98,7 @@ export default function App() {
               exactly this purpose but never actually applied anywhere.
               Wiring them in here fixes every route at once, the same way
               pb-10 below was already centralized instead of per-page. */}
-          <div className="pb-10 px-4 sm:px-6 lg:px-8 max-w-content mx-auto">
+          <div className="pt-3 pb-10 px-4 sm:px-6 lg:px-8 max-w-content mx-auto">
             <Suspense fallback={<PageFallback />}>
               <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
