@@ -1,23 +1,21 @@
 // api/series-matches.js — Match list for a specific cricket series
-// Blueprint: CricAPI → Vercel KV (10min cache)
+// Blueprint: CricAPI → Vercel KV (1hr cache)
 // Used by: src/hooks/useLiveScores.js → useSeriesMatches(seriesId)
 //          src/components/tournament/SeriesMatches.jsx
-//
-// ❌ THIS FILE WAS MISSING — caused 404 on series expand in Tournament page
-// ✅ Created fresh — fixes useSeriesMatches hook 404 error
+//          api/cricket-upcoming.js (shares this SAME per-series cache key —
+//          see api/_lib/cricapi.js for why)
 //
 // Env vars required:
 //   CRICAPI_KEY
 //   ALLOWED_ORIGIN
 
 import { kv } from '@vercel/kv'
+import { fetchSeriesMatches } from './_lib/cricapi.js'
 
-const CRICAPI_SERIES_INFO = 'https://api.cricapi.com/v1/series_info'
-// ⚠️ [Fix] 10 min ছিল আগে, তারপর 30 min করা হয়েছিল। এখন 30 min → 1hr —
-// cricket-upcoming.js এর refresh frequency কমানোর পরও (6hr→12hr), এই
-// endpoint টাই একমাত্র on-demand (user traffic-নির্ভর) consumer, তাই এখানে
-// আরেকটু margin রাখা হলো। একাধিক ভিন্ন series ঘন ঘন expand হলেও প্রতি
-// series এ দিনে ২৪টার বেশি call হবে না (আগে ছিল ৪৮টা পর্যন্ত সম্ভব)।
+// ⚠️ [Fix] 10 min → 30 min → এখন 1hr — CRICAPI_KEY এর 100 req/day limit
+// cricket-series.js + cricket-upcoming.js এর সাথেও শেয়ার হয়। এই cache key
+// (series-matches:v2:<id>) এখন cricket-upcoming.js ও ব্যবহার করে (একই
+// সিরিজ দুই ফিচারেই লাগলে দ্বিতীয়বার আলাদা CricAPI call লাগে না)।
 const CACHE_TTL           = 3600   // 1 hour
 const EDGE_CACHE          = 's-maxage=3600, stale-while-revalidate=7200'
 
@@ -44,7 +42,7 @@ export default async function handler(req, res) {
   const cacheKey = `series-matches:v2:${seriesId}`
 
   try {
-    // ── 1. KV Cache (10min) ───────────────────────────
+    // ── 1. KV Cache (1hr) ──────────────────────────────
     const cached = await kv.get(cacheKey)
     if (cached) {
       res.setHeader('Cache-Control', EDGE_CACHE)
@@ -55,76 +53,14 @@ export default async function handler(req, res) {
       return res.status(503).json({ error: 'CRICAPI_KEY not configured' })
     }
 
-    // ── 2. CricAPI — series_info gives match list ─────
-    // CricAPI v1 series_info endpoint:
-    //   GET /v1/series_info?apikey=KEY&id=SERIES_ID
-    //   Returns: { data: { info: {...}, matchList: [...] } }
-    const url = `${CRICAPI_SERIES_INFO}?apikey=${process.env.CRICAPI_KEY}&id=${encodeURIComponent(seriesId)}`
+    // ── 2. CricAPI — series_info gives match list (shared helper) ──
+    const { data, seriesName } = await fetchSeriesMatches(seriesId, process.env.CRICAPI_KEY)
 
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(10000),
-    })
-
-    if (!response.ok) throw new Error(`CricAPI ${response.status}`)
-
-    const raw = await response.json()
-
-    if (raw.status !== 'success') {
-      throw new Error(raw.reason || 'CricAPI error')
-    }
-
-    // CricAPI returns matchList inside data
-    const seriesInfo  = raw.data?.info   || {}
-    const matchList   = raw.data?.matchList || []
-    const now         = Date.now()
-
-    const data = matchList.map(m => {
-      const startMs   = m.dateTimeGMT ? new Date(m.dateTimeGMT).getTime() : null
-      const isUpcoming = startMs ? startMs > now : false
-      const isLive     = m.matchStarted && !m.matchEnded
-
-      return {
-        id:         m.id,
-        name:       m.name,
-        matchType:  m.matchType,
-        format:     detectFormat(m.matchType || m.name || ''),
-        status:     m.status,
-        venue:      m.venue || '',
-        date:       formatDate(m.dateTimeGMT),
-        time:       formatTime(m.dateTimeGMT),
-        startDate:  m.dateTimeGMT || null,
-        teams:      m.teams || [],
-        // ✅ [Fix] Was never passed through — CricAPI's matchList items
-        // include a `score` array (same [{inning, r, w, o}] shape
-        // MatchResultCard already renders), but nothing here ever
-        // extracted it, so a finished match inside an expanded series
-        // had no way to show its result.
-        score:      m.score || [],
-        isLive,
-        isUpcoming,
-        isFinished: m.matchEnded || false,
-        seriesId,
-        seriesName: seriesInfo.name || '',
-      }
-    })
-
-    // Sort: live first → upcoming (soonest first) → finished (most recent first)
-    data.sort((a, b) => {
-      const rank = (x) => x.isLive ? 0 : x.isUpcoming ? 1 : 2
-      const ra = rank(a), rb = rank(b)
-      if (ra !== rb) return ra - rb
-      if (a.startDate && b.startDate) {
-        const diff = new Date(a.startDate) - new Date(b.startDate)
-        return ra === 2 ? -diff : diff   // finished bucket: descending (most recent first)
-      }
-      return 0
-    })
-
-    // ── 3. KV save (10min) ────────────────────────────
+    // ── 3. KV save (1hr) ───────────────────────────────
     await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
 
     res.setHeader('Cache-Control', EDGE_CACHE)
-    return res.status(200).json({ source: 'api', seriesName: seriesInfo.name || '', data })
+    return res.status(200).json({ source: 'api', seriesName, data })
 
   } catch (error) {
     console.error('[series-matches] Error:', error.message)
@@ -137,27 +73,4 @@ export default async function handler(req, res) {
     } catch {}
     return res.status(500).json({ error: 'Service unavailable.' })
   }
-}
-
-function detectFormat(str = '') {
-  const u = str.toUpperCase()
-  if (u.includes('TEST'))              return 'Test'
-  if (u.includes('ODI'))               return 'ODI'
-  if (/T20|IPL|BPL|PSL|BBL/i.test(u)) return 'T20'
-  if (/T10/i.test(u))                  return 'T10'
-  return ''
-}
-
-function formatDate(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return isNaN(d) ? iso : d.toLocaleDateString('en-BD', { day: '2-digit', month: 'short' })
-}
-
-function formatTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return isNaN(d) ? '' : d.toLocaleTimeString('en-BD', {
-    hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Dhaka',
-  })
 }

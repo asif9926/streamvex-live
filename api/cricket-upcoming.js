@@ -1,24 +1,45 @@
 // api/cricket-upcoming.js — Upcoming cricket matches
-// Blueprint: CricAPI → Vercel KV (6hr cache)
-// ✅ [Update #1] Edge Cache: s-maxage=21600, stale-while-revalidate=43200
+// Blueprint: notable-series aggregation → Vercel KV (12hr cache)
+//
+// ⚠️ [Architecture Change] আগে এই endpoint CricAPI'র generic
+// `/v1/matches` ফিড থেকে raw matches টেনে filter করত। কিন্তু ধরা পড়েছে
+// (ব্যবহারকারীর debug output দিয়ে) যে ওই ফিড এর কভারেজ সীমিত — মোট মাত্র
+// ~200 entry, বেশিরভাগই recently-added domestic/franchise league (Syed
+// Mushtaq Ali Trophy, Lanka Premier League), আর ইতিমধ্যে চলমান bilateral
+// tour (যেমন Bangladesh tour of Zimbabwe, 2026) এর matches ওই ফিডে
+// থাকেই না — MAX_PAGES বাড়িয়েও লাভ হতো না, কারণ ডেটা নিজেই নেই।
+//
+// Fix: এখন এই endpoint নিজে raw match ফিড থেকে filter করে না। বরং
+// cricket-series.js যে already-notable-filtered series list বানায়
+// (30-page পূর্ণ কভারেজ সহ, 24hr cache) সেটা পড়ে, তার মধ্যে চলমান/আসন্ন
+// সিরিজগুলো বেছে নেয়, আর প্রতিটার আসল match list আনে series_info দিয়ে
+// (api/_lib/cricapi.js — series-matches.js এর সাথে SHARED cache key,
+// তাই একই সিরিজ দুই ফিচারে লাগলে দ্বিতীয়বার আলাদা call লাগে না)।
+// ফলাফল: World Cup, bilateral tour, franchise league — সবকিছুর matches
+// এখন নির্ভরযোগ্যভাবে দেখা যাবে, শুধু যেটা CricAPI'র সীমিত /matches ফিডে
+// কাকতালীয়ভাবে ছিল তা না।
 //
 // Env vars required:
 //   CRICAPI_KEY
 
 import { kv } from '@vercel/kv'
-import { isNotableCricket } from './_lib/cricketFilters.js'
+import { resolveSeriesDates } from './_lib/cricketFilters.js'
+import { fetchSeriesMatches } from './_lib/cricapi.js'
 
-const CRICAPI_URL = 'https://api.cricapi.com/v1/matches'
-// ⚠️ [Fix] 6hr → 12hr. CRICAPI_KEY এর 100 req/day limit এই একই key
-// cricket-series.js (worst-case ~30/day) আর series-matches.js (on-demand,
-// প্রতি expand এ) এর সাথেও শেয়ার হয়। এই endpoint 6hr TTL এ দিনে 4 বার
-// refresh হতো, প্রতিবার worst-case 10 page = 40/day — খালি এটাই বাজেটের
-// প্রায় অর্ধেক খেয়ে ফেলত, series-matches.js এর on-demand call এর জন্য
-// সামান্য headroom থাকত। Upcoming ফিক্সচারের schedule ঘন্টায় ঘন্টায়
-// বদলায় না (score আসে live-score.js থেকে, এটা শুধু schedule দেখায়) —
-// 12hr এ কমালে ঝুঁকি ছাড়াই দিনে 2 refresh (worst-case ~20 call) এ নেমে আসে।
+const SERIES_CACHE_KEY          = 'cricket-series:v7'   // cricket-series.js এর cache — এখানে re-fetch করা হয় না, শুধু পড়া হয়
+const SERIES_MATCH_CACHE_PREFIX = 'series-matches:v2:'  // series-matches.js এর সাথে SHARED prefix
+const SERIES_MATCH_TTL          = 3600                  // series-matches.js এর TTL এর সাথে সমান রাখা হলো
+
+// ⚠️ [Budget] প্রতি candidate series এ (cache miss হলে) 1 CricAPI call।
+// cricket-series.js (~30/day, 24hr cache) এর সাথে এই বাজেট মিলিয়ে 100/day
+// এর নিচে রাখতে 15 এ cap করা হলো — 2 refresh/day (12hr TTL) হিসেবে
+// worst-case ~30/day, যা series-matches.js এর on-demand call এর জন্যও
+// যথেষ্ট headroom রাখে।
+const MAX_SERIES_TO_SCAN = 15
+
+// ⚠️ [Fix] 6hr → 12hr — same quota reasoning হিসেবে
 const CACHE_TTL   = 43200   // 12 hours
-const EDGE_CACHE  = 's-maxage=43200, stale-while-revalidate=86400'  // ✅ [Update #1]
+const EDGE_CACHE  = 's-maxage=43200, stale-while-revalidate=86400'
 
 export default async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
@@ -28,11 +49,13 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET')    return res.status(405).json({ error: 'Method not allowed' })
 
-  // ✅ [Debug] ?debug=1 — cricket-series.js এর মতোই, cache বাইপাস করে raw
-  // fetch + প্রতিটা filter ধাপের count/sample দেখায়। ব্যবহার:
+  // ✅ [Debug] ?debug=1 — cache বাইপাস করে candidate series selection ও
+  // aggregation এর প্রতিটা ধাপ দেখায়। ব্যবহার:
   // yoursite.vercel.app/api/cricket-upcoming?debug=1
   const debugMode = req.query.debug === '1'
-  const cacheKey  = 'cricket-upcoming:v2'
+  // ✅ v2 → v3: data source সম্পূর্ণ বদলে গেছে (raw /matches ফিড থেকে
+  // series-aggregation এ), পুরনো cache যাতে নতুন logic কে shadow না করে
+  const cacheKey  = 'cricket-upcoming:v3'
 
   try {
     // ── 1. KV Cache (12hr) ─────────────────────────────
@@ -46,88 +69,80 @@ export default async function handler(req, res) {
       return res.status(503).json({ error: 'CRICAPI_KEY not configured' })
     }
 
-    // ── 2. CricAPI — upcoming matches (paginated) ────
-    // ⚠️ [Bug Fix — same root cause as cricket-series.js] CricAPI's
-    // /matches endpoint returns ALL matches worldwide (finished/live/
-    // upcoming, every level of cricket) in a fixed non-chronological order,
-    // ~25 per page. Only fetching offset=0 meant "Upcoming" was filtered
-    // from whatever arbitrary ~25 matches landed on page 1 — often missing
-    // real near-term matches entirely, which is why the list didn't match
-    // reality. Merging several pages first gives the date filter/sort a
-    // representative set to work with. Runs once per 6hr cache window, so
-    // the extra pages are quota-safe (≤4 calls per refresh).
-    // ⚠️ [Update] MAX_PAGES bumped 4→10 — same reasoning as
-    // cricket-series.js: match-results.js no longer shares CRICAPI_KEY's
-    // quota, freeing headroom, and needed because isNotableCricket below
-    // discards most domestic/associate-nation noise, so a bigger raw pool
-    // is needed for enough international/famous-league matches to survive.
-    const MAX_PAGES = 10
-    let all      = []
-    let pageSize = null
-    for (let page = 0; page < MAX_PAGES; page++) {
-      const offset = page * (pageSize || 25)
-      const url = `${CRICAPI_URL}?apikey=${process.env.CRICAPI_KEY}&offset=${offset}`
-      const response = await fetch(url, { signal: AbortSignal.timeout(10000) })
-      if (!response.ok) {
-        if (page === 0) throw new Error(`CricAPI ${response.status}`)
-        break
-      }
-      const raw = await response.json()
-      if (raw.status !== 'success') {
-        if (page === 0) throw new Error(raw.reason || 'CricAPI error')
-        break
-      }
-      const batch = raw.data || []
-      if (pageSize === null) pageSize = batch.length || 25
-      all = all.concat(batch)
-      if (batch.length === 0 || batch.length < pageSize) break
+    // ── 2. cricket-series.js এর cache পড়ো (re-fetch না, শুধু read) ──
+    const seriesCache   = await kv.get(SERIES_CACHE_KEY)
+    const notableSeries = seriesCache?._data || seriesCache || []
+
+    if (!notableSeries.length) {
+      // fresh deploy এ cricket-series.js এখনো একবারও চলেনি — graceful empty,
+      // error না। series তালিকা populate হলে পরের refresh এ ঠিক হয়ে যাবে।
+      return res.status(200).json({ source: 'no_series_cache', data: [] })
     }
 
-    // Upcoming only — dateTimeGMT এখনো আসেনি এবং matchStarted = false
-    const now  = Date.now()
-    const byDate = all.filter(m => {
-      // ✅ [Fix] NaN guard — invalid dates should not pass filter
-      const startTime = new Date(m.dateTimeGMT).getTime()
-      if (isNaN(startTime)) return false
-      return !m.matchStarted && startTime > now
-    })
-    // ⚠️ [Bug Fix] User request — only international matches + famous
-    // T20 leagues (IPL/BPL/PSL/BBL/…), hide domestic/qualifier noise.
-    const byName = byDate.filter(m => isNotableCricket(m.name, m.series))
+    // ── 3. চলমান/আসন্ন সিরিজ বেছে নাও, শুরুর তারিখ অনুযায়ী কাছেরটা আগে ──
+    const now = Date.now()
+    const candidates = notableSeries
+      .map(s => ({ series: s, ...resolveSeriesDates(s.name, s.startDate, s.endDate) }))
+      .filter(s => !s.end || s.end.getTime() >= now)
+      .sort((a, b) => (a.start?.getTime() ?? Infinity) - (b.start?.getTime() ?? Infinity))
+      .slice(0, MAX_SERIES_TO_SCAN)
+      .map(s => s.series)
+
+    // ── 4. প্রতিটা candidate series এর match list আনো ────────────
+    let allMatches = []
+    let cricapiCallsMade = 0
+    for (const s of candidates) {
+      const perSeriesKey = `${SERIES_MATCH_CACHE_PREFIX}${s.id}`
+      let seriesMatchData = await kv.get(perSeriesKey)
+
+      if (!seriesMatchData) {
+        try {
+          const { data } = await fetchSeriesMatches(s.id, process.env.CRICAPI_KEY)
+          seriesMatchData = { _data: data, _updatedAt: new Date().toISOString() }
+          await kv.set(perSeriesKey, seriesMatchData, { ex: SERIES_MATCH_TTL })
+          cricapiCallsMade++
+        } catch (err) {
+          // এক সিরিজ fail করলে বাকি সব বাদ দেওয়ার দরকার নেই — skip করে এগোও
+          console.error(`[cricket-upcoming] fetchSeriesMatches(${s.id}) failed:`, err.message)
+          continue
+        }
+      }
+
+      const matches = (seriesMatchData?._data || []).filter(m => m.isUpcoming)
+      allMatches.push(...matches)
+    }
+
+    allMatches.sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
 
     if (debugMode) {
-      const sample = (arr) => arr.slice(0, 20).map(m => ({
-        name: m.name, series: m.series, dateTimeGMT: m.dateTimeGMT, matchStarted: m.matchStarted,
-      }))
       return res.status(200).json({
         debug: true,
-        pagesFetched:    pageSize ? Math.ceil(all.length / pageSize) : 0,
-        totalRawFetched: all.length,
-        afterDateFilter: byDate.length,
-        afterNameFilter: byName.length,
-        sampleRaw:       sample(all),
-        sampleAfterDate: sample(byDate),
-        sampleAfterName: sample(byName),
+        notableSeriesTotal:  notableSeries.length,
+        candidatesScanned:   candidates.length,
+        cricapiCallsMade,
+        totalUpcomingMatches: allMatches.length,
+        candidateSeriesSample: candidates.slice(0, 15).map(s => ({ id: s.id, name: s.name })),
+        sample: allMatches.slice(0, 20).map(m => ({
+          name: m.name, seriesName: m.seriesName, startDate: m.startDate,
+        })),
       })
     }
 
-    const data = byName
-      .sort((a, b) => new Date(a.dateTimeGMT) - new Date(b.dateTimeGMT))
-      .map(m => ({
-        id:        m.id,
-        name:      m.name,
-        matchType: m.matchType,
-        format:    detectFormat(m.matchType || m.name || ''),
-        status:    m.status,
-        venue:     m.venue,
-        date:      formatDate(m.dateTimeGMT),
-        time:      formatTime(m.dateTimeGMT),
-        startDate: m.dateTimeGMT,
-        teams:     m.teams || [],
-        series:    m.series || '',
-      }))
+    const data = allMatches.map(m => ({
+      id:        m.id,
+      name:      m.name,
+      matchType: m.matchType,
+      format:    m.format,
+      status:    m.status,
+      venue:     m.venue,
+      date:      m.date,
+      time:      m.time,
+      startDate: m.startDate,
+      teams:     m.teams || [],
+      series:    m.seriesName || '',
+    }))
 
-    // ── 3. KV save (6hr) ──────────────────────────────
+    // ── 5. KV save (12hr) ──────────────────────────────
     await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
 
     res.setHeader('Cache-Control', EDGE_CACHE)
@@ -144,25 +159,4 @@ export default async function handler(req, res) {
     } catch {}
     return res.status(500).json({ error: 'Service unavailable.' })
   }
-}
-
-function detectFormat(str = '') {
-  const u = str.toUpperCase()
-  if (u.includes('TEST'))              return 'Test'
-  if (u.includes('ODI'))               return 'ODI'
-  if (/T20|IPL|BPL|PSL|BBL/i.test(u)) return 'T20'
-  if (/T10/i.test(u))                  return 'T10'
-  return ''
-}
-
-function formatDate(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return isNaN(d) ? iso : d.toLocaleDateString('en-BD', { day: '2-digit', month: 'short' })
-}
-
-function formatTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return isNaN(d) ? '' : d.toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Dhaka' })
 }
