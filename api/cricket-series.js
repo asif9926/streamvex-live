@@ -20,11 +20,15 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET')    return res.status(405).json({ error: 'Method not allowed' })
 
-  const cacheKey = 'cricket-series:v6'
+  // ✅ [Debug] ?debug=1 — বাস্তবে CricAPI কী ডেটা দিচ্ছে সেটা সরাসরি দেখার
+  // জন্য। ক্যাশ বাইপাস করে, filter-এর প্রতিটা ধাপে কতগুলো টিকল তার sample
+  // দেখায়। ব্রাউজারে খুলুন: yoursite.vercel.app/api/cricket-series?debug=1
+  const debugMode = req.query.debug === '1'
+  const cacheKey  = 'cricket-series:v6'
 
   try {
     // ── 1. KV Cache (24hr) ────────────────────────────
-    const cached = await kv.get(cacheKey)
+    const cached = debugMode ? null : await kv.get(cacheKey)
     if (cached) {
       res.setHeader('Cache-Control', EDGE_CACHE)
       return res.status(200).json({ source: 'cache', data: cached._data || cached })
@@ -58,20 +62,30 @@ export default async function handler(req, res) {
       if (batch.length === 0 || batch.length < pageSize) break
     }
 
-    // ✅ [Simplified per user request] একটাই সহজ নিয়ম, কোনো fallback tier
-    // নেই — যেটা পুরনো ডেটা আবার ফিরিয়ে আনছিল। শুধু:
-    //   ১) international সিরিজ / famous league (IPL, BPL, PSL...) — নাম দিয়ে
-    //   ২) এখনো শেষ হয়নি (ongoing অথবা upcoming) — তারিখ দিয়ে
-    // দুটোই সত্যি না হলে বাদ। লিস্ট ছোট হলেও সমস্যা নেই — ভুল/পুরনো ডেটা
-    // দেখানোর চেয়ে কম কিন্তু সঠিক ডেটা দেখানো ভালো।
-    const now  = Date.now()
-    const data = all
-      .filter(s => isNotableCricket(s.name))
-      .filter(s => {
-        if (!s.endDate) return true   // end date না থাকলে ধরে নিচ্ছি এখনো শেষ হয়নি
-        const end = new Date(s.endDate).getTime()
-        return isNaN(end) || end >= now
+    // ✅ [Debug] filter-এর প্রতিটা ধাপ আলাদা করে রাখা হলো যাতে debug mode-এ
+    // প্রতিটা ধাপে কতগুলো টিকল তা আলাদাভাবে দেখানো যায়।
+    const byName = all.filter(s => isNotableCricket(s.name))
+    const now    = Date.now()
+    const byDate = byName.filter(s => {
+      if (!s.endDate) return true
+      const end = new Date(s.endDate).getTime()
+      return isNaN(end) || end >= now
+    })
+
+    if (debugMode) {
+      const sample = (arr) => arr.slice(0, 20).map(s => ({ name: s.name, startDate: s.startDate, endDate: s.endDate }))
+      return res.status(200).json({
+        debug: true,
+        totalRawFetched:  all.length,
+        afterNameFilter:  byName.length,
+        afterDateFilter:  byDate.length,
+        sampleRaw:        sample(all),
+        sampleAfterName:  sample(byName),
+        sampleAfterDate:  sample(byDate),
       })
+    }
+
+    const data = byDate
       .map(s => ({
         id:         s.id,
         name:       s.name,
