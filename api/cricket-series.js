@@ -6,7 +6,7 @@
 //   CRICAPI_KEY — cricapi.com থেকে free API key নাও
 
 import { kv } from '@vercel/kv'
-import { isNotableCricket } from './_lib/cricketFilters.js'
+import { isNotableCricket, resolveSeriesDates } from './_lib/cricketFilters.js'
 
 const CRICAPI_URL = 'https://api.cricapi.com/v1/series'
 const CACHE_TTL   = 86400   // 24 hours
@@ -24,7 +24,10 @@ export default async function handler(req, res) {
   // জন্য। ক্যাশ বাইপাস করে, filter-এর প্রতিটা ধাপে কতগুলো টিকল তার sample
   // দেখায়। ব্রাউজারে খুলুন: yoursite.vercel.app/api/cricket-series?debug=1
   const debugMode = req.query.debug === '1'
-  const cacheKey  = 'cricket-series:v6'
+  // ✅ [Fix] v6 → v7: v6 এর KV cache-এ ভুল date-filter এর কারণে empty []
+  // ফলাফল 24hr এর জন্য stuck হয়ে ছিল। version bump না করলে deploy করার
+  // পরও পুরনো empty cache-ই serve হতো যতক্ষণ না TTL নিজে থেকে expire হয়।
+  const cacheKey  = 'cricket-series:v7'
 
   try {
     // ── 1. KV Cache (24hr) ────────────────────────────
@@ -66,10 +69,16 @@ export default async function handler(req, res) {
     // প্রতিটা ধাপে কতগুলো টিকল তা আলাদাভাবে দেখানো যায়।
     const byName = all.filter(s => isNotableCricket(s.name))
     const now    = Date.now()
+    // ⚠️ [Bug Fix] আগে সরাসরি `new Date(s.endDate)` করা হতো — কিন্তু CricAPI
+    // অনেক সিরিজের endDate বছর ছাড়া পাঠায় (e.g. "Apr 11"), যেটা JS
+    // চুপচাপ current year ধরে নিয়ে ভুল (প্রায়ই অতীত) তারিখ বানিয়ে ফেলত,
+    // ফলে সব future সিরিজও "শেষ হয়ে গেছে" ধরে বাদ পড়ে যাচ্ছিল
+    // (afterDateFilter সবসময় 0)। resolveSeriesDates() সিরিজের নাম থেকে
+    // আসল বছর বের করে সেটা দিয়ে সঠিকভাবে parse করে।
     const byDate = byName.filter(s => {
       if (!s.endDate) return true
-      const end = new Date(s.endDate).getTime()
-      return isNaN(end) || end >= now
+      const { end } = resolveSeriesDates(s.name, s.startDate, s.endDate)
+      return !end || end.getTime() >= now
     })
 
     if (debugMode) {
@@ -100,17 +109,20 @@ export default async function handler(req, res) {
       }))
 
     // Sort: চলমান আগে, তারপর আসন্ন (কাছের তারিখ আগে)
+    // ⚠️ [Bug Fix] এখানেও একই year-less date সমস্যা ছিল — সরাসরি
+    // `new Date(s.startDate/endDate)` না করে resolveSeriesDates() দিয়ে
+    // year-corrected তারিখ ব্যবহার করা হচ্ছে, নাহলে "ongoing" চেক আর
+    // sort order ভুল হয়ে যেত।
     data.sort((a, b) => {
       const rank = (s) => {
-        const start = s.startDate ? new Date(s.startDate).getTime() : null
-        const end   = s.endDate   ? new Date(s.endDate).getTime()   : null
-        if (start !== null && end !== null && start <= now && now <= end) return 0  // ongoing
+        const { start, end } = resolveSeriesDates(s.name, s.startDate, s.endDate)
+        if (start && end && start.getTime() <= now && now <= end.getTime()) return 0  // ongoing
         return 1   // upcoming
       }
       const ra = rank(a), rb = rank(b)
       if (ra !== rb) return ra - rb
-      const da = a.startDate ? new Date(a.startDate).getTime() : 0
-      const db = b.startDate ? new Date(b.startDate).getTime() : 0
+      const da = resolveSeriesDates(a.name, a.startDate, a.endDate).start?.getTime() || 0
+      const db = resolveSeriesDates(b.name, b.startDate, b.endDate).start?.getTime() || 0
       return da - db
     })
 

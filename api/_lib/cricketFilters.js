@@ -68,3 +68,63 @@ export function isNotableCricket(name = '', extra = '') {
 
   return false
 }
+
+// ─────────────────────────────────────────────────────────────────
+// resolveSeriesDates — CricAPI's /v1/series endpoint দেয় startDate/
+// endDate দুই রকম ফরম্যাটে, একটাই response এর মধ্যে mixed:
+//   - পূর্ণ ISO:      "2027-03-18"
+//   - শুধু month+day: "Apr 11"   ← বছর নেই!
+//
+// ⚠️ [Bug Fix] year-less endDate গুলো `new Date("Apr 11")` দিয়ে parse
+// করলে JS চুপচাপ CURRENT YEAR ধরে নেয় — তাই 2027 সালের একটা সিরিজের
+// endDate "Apr 11" আজকের (2026) হিসেবে parse হয়ে অতীতের তারিখ হয়ে
+// যাচ্ছিল, ফলে সিরিজটা "শেষ হয়ে গেছে" ধরে বাদ পড়ে যাচ্ছিল — এটাই কারণ
+// afterDateFilter সবসময় 0 আসছিল, নাম-ফিল্টার ঠিকভাবে কাজ করলেও।
+//
+// Fix: সিরিজের নাম থেকে বছর বের করে (e.g. "...2027" থেকে 2027) সেটাকে
+// fallback year হিসেবে ব্যবহার করা হয়। তারপর যদি end < start হয়ে যায়
+// (Dec→Jan এর মতো year-crossing সিরিজ), end-এর বছর +1 করে ঠিক করা হয়।
+// ─────────────────────────────────────────────────────────────────
+
+function extractYearFromName(name = '') {
+  const m = name.match(/\d{4}/)
+  return m ? parseInt(m[0], 10) : null
+}
+
+function parseFlexibleDate(dateStr, fallbackYear) {
+  if (!dateStr) return null
+  // পূর্ণ ISO / already has a 4-digit year in the string itself
+  if (/\d{4}/.test(dateStr)) {
+    const d = new Date(dateStr)
+    return isNaN(d.getTime()) ? null : d
+  }
+  // Short form ("Apr 11") — বছর নেই, নাম থেকে পাওয়া year fallback হিসেবে ব্যবহার
+  const year = fallbackYear || new Date().getFullYear()
+  const d = new Date(`${dateStr} ${year}`)
+  return isNaN(d.getTime()) ? null : d
+}
+
+/**
+ * resolveSeriesDates — series name + raw start/end date string থেকে
+ * সঠিক (year-corrected) Date object বের করে।
+ *
+ * @param {string} name         সিরিজের নাম (year extract করার জন্য)
+ * @param {string} startDateRaw CricAPI এর raw startDate
+ * @param {string} endDateRaw   CricAPI এর raw endDate
+ * @returns {{ start: Date|null, end: Date|null }}
+ */
+export function resolveSeriesDates(name, startDateRaw, endDateRaw) {
+  const nameYear = extractYearFromName(name)
+  const start = parseFlexibleDate(startDateRaw, nameYear)
+  let   end   = parseFlexibleDate(endDateRaw, nameYear)
+
+  // Year-crossing সিরিজ (e.g. start Dec 2026, end "Jan 08" → আসলে 2027):
+  // fallback year দিয়ে parse করার পর end যদি start এর আগে পড়ে যায়,
+  // তার মানে end আসলে পরের বছরে পড়ে।
+  if (start && end && end < start) {
+    end = new Date(end)
+    end.setFullYear(end.getFullYear() + 1)
+  }
+
+  return { start, end }
+}
