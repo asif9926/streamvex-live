@@ -1,29 +1,19 @@
 // api/match-results.js — Completed cricket results + Football finished matches
-// ✅ [Bug Fix] Cricket results switched from RapidAPI's cricket-live-line1
-//    /recentMatches (an opaque "recent matches" endpoint with no date/status
-//    filtering control — no visibility into how "recent" is defined or
-//    whether it's actually the right matches) to CricAPI's /v1/matches,
-//    the SAME reliable, structured endpoint already used successfully in
-//    api/cricket-upcoming.js. Filters matchEnded === true explicitly and
-//    sorts by real match date, so results actually reflect real completed
-//    matches instead of whatever RapidAPI's black-box endpoint returned.
-//    Also consolidates ALL cricket data (series/upcoming/results) onto one
-//    provider — RAPIDAPI_KEY is now only needed for live-score.js's
-//    real-time in-play data.
-// ✅ Football uses football-data.org (v4), matching the SAME proven
+// ✅ Football switched to football-data.org (v4), matching the SAME proven
 //    working pattern already used in api/football-upcoming.js and
 //    api/football-series.js in this project — per-competition endpoint,
 //    NOT the global /v4/matches list (which is unreliable/restricted on
 //    the free tier).
 //
 // Env vars required:
-//   CRICAPI_KEY             — cricket results (switched from RAPIDAPI_KEY)
+//   RAPIDAPI_KEY            — cricket-live-line1 (cricket results)
 //   FOOTBALL_DATA_API_KEY   — football-data.org  (football results)
 //   ALLOWED_ORIGIN
 
 import { kv } from '@vercel/kv'
 
-const CRICAPI_URL          = 'https://api.cricapi.com/v1/matches'
+const CRICKET_RESULTS_API = 'https://cricket-live-line1.p.rapidapi.com/recentMatches'
+const CRICKET_HOST        = 'cricket-live-line1.p.rapidapi.com'
 const FD_BASE              = 'https://api.football-data.org/v4'
 
 // ✅ Same mapping as api/football-upcoming.js / api/football-series.js —
@@ -42,18 +32,8 @@ const SUPPORTED_LEAGUES = {
 // leaving headroom for other endpoints hitting the same key.
 const RESULT_LEAGUES = ['CL', 'WC', 'PL', 'PD', 'BL1', 'SA']
 
-// ⚠️ [Bug Fix] Cricket now paginates CricAPI (see below) and shares
-// CRICAPI_KEY's 100/day quota with cricket-series.js + cricket-upcoming.js
-// + series-matches.js. A 1hr cache here would cost up to 4 pages × 24
-// refreshes/day = 96 calls/day on its own. 6hr matches cricket-upcoming.js's
-// reasoning — finished matches don't change, so there's no real freshness
-// need for hourly refresh — and keeps this endpoint to ≤4 calls per refresh.
-// Football keeps its original 1hr TTL — football-data.org's limit is a
-// 10 req/min rate limit, not a daily quota, so no such pressure there.
-const CRICKET_CACHE_TTL  = 21600  // 6 hours
-const FOOTBALL_CACHE_TTL = 3600   // 1 hour
-const EDGE_CACHE_CRICKET  = 's-maxage=21600, stale-while-revalidate=43200'
-const EDGE_CACHE_FOOTBALL = 's-maxage=3600, stale-while-revalidate=7200'
+const CACHE_TTL  = 3600  // 1 hour KV TTL
+const EDGE_CACHE = 's-maxage=3600, stale-while-revalidate=7200'
 
 export default async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
@@ -73,10 +53,8 @@ export default async function handler(req, res) {
   // handy for verifying a deploy directly from the browser:
   // /api/match-results?sport=football&nocache=1
   const bypassCache = req.query.nocache === '1' || req.query.nocache === 'true'
-  const cacheTTL     = sport === 'cricket' ? CRICKET_CACHE_TTL : FOOTBALL_CACHE_TTL
-  const edgeCache    = sport === 'cricket' ? EDGE_CACHE_CRICKET : EDGE_CACHE_FOOTBALL
-  const cacheHeader = bypassCache ? 'no-store' : edgeCache
-  const cacheKey    = `match-results:v4:${sport}`
+  const cacheHeader = bypassCache ? 'no-store' : EDGE_CACHE
+  const cacheKey    = `match-results:v3:${sport}`
 
   try {
     // ── 1. KV Cache Check ─────────────────────────────
@@ -91,46 +69,22 @@ export default async function handler(req, res) {
     let debug = null
 
     if (sport === 'cricket') {
-      if (!process.env.CRICAPI_KEY) {
-        return res.status(503).json({ error: 'CRICAPI_KEY missing' })
+      if (!process.env.RAPIDAPI_KEY) {
+        return res.status(503).json({ error: 'RAPIDAPI_KEY missing' })
       }
 
-      // ✅ [Bug Fix] Paginate CricAPI's /v1/matches (same approach as
-      // cricket-upcoming.js) instead of RapidAPI's opaque /recentMatches —
-      // gives an actual matchEnded flag + real dateTimeGMT to filter/sort
-      // on, rather than trusting whatever RapidAPI decided was "recent".
-      const MAX_PAGES = 4
-      let all      = []
-      let pageSize = null
-      let lastOk   = false
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const offset = page * (pageSize || 25)
-        const url = `${CRICAPI_URL}?apikey=${process.env.CRICAPI_KEY}&offset=${offset}`
-        let r
-        try {
-          r = await fetch(url, { signal: AbortSignal.timeout(10000) })
-        } catch {
-          break
-        }
-        if (!r.ok) break
-        lastOk = true
-        const raw = await r.json().catch(() => null)
-        if (!raw || raw.status !== 'success') break
-        const batch = raw.data || []
-        if (pageSize === null) pageSize = batch.length || 25
-        all = all.concat(batch)
-        if (batch.length === 0 || batch.length < pageSize) break
-      }
+      response = await fetch(CRICKET_RESULTS_API, {
+        headers: {
+          'x-rapidapi-key':  process.env.RAPIDAPI_KEY,
+          'x-rapidapi-host': CRICKET_HOST,
+          'Content-Type':    'application/json',
+        },
+        signal: AbortSignal.timeout(10000),
+      })
 
-      response = { ok: lastOk }
-      if (lastOk) {
-        // filter completed matches only, sort most-recently-played first,
-        // keep a reasonable slice for the Results tab
-        data = normalizeCricapiResults(
-          all.filter(m => m.matchEnded === true)
-             .sort((a, b) => new Date(b.dateTimeGMT) - new Date(a.dateTimeGMT))
-             .slice(0, 15)
-        )
+      if (response.ok) {
+        const raw = await response.json()
+        data = normalizeCricketResults(raw)
       }
 
     } else {
@@ -225,7 +179,7 @@ export default async function handler(req, res) {
 
     // ── 3. Save to KV Cache ───────────────────────────
     if (data.length > 0) {
-      await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: cacheTTL })
+      await kv.set(cacheKey, { _data: data, _updatedAt: new Date().toISOString() }, { ex: CACHE_TTL })
     }
 
     res.setHeader('Cache-Control', cacheHeader)
@@ -256,42 +210,27 @@ function toText(val, fallback = '') {
   return fallback
 }
 
-// Normalize Cricket Data (from CricAPI /v1/matches — matchEnded === true only)
-// ✅ [Bug Fix] Replaces the old RapidAPI-shaped normalizer. CricAPI's score
-// array can have MORE than 2 entries for Test matches (up to 4 innings —
-// 2 per team), each tagged with an `inning` string like "India Inning 1".
-// Matching by team-name substring and taking the LAST match per team picks
-// up each team's most complete/final innings instead of assuming score[0]
-// and score[1] always map 1:1 to teams[0] and teams[1] (true for limited-
-// overs matches, not reliably true for Tests).
-function normalizeCricapiResults(matches) {
-  return matches.map(m => {
-    const teams    = Array.isArray(m.teams) ? m.teams : []
-    const t1       = toText(teams[0], 'Team 1')
-    const t2       = toText(teams[1], 'Team 2')
-    const scoreArr = Array.isArray(m.score) ? m.score : []
+// Normalize Cricket Data (from RapidAPI cricket-live-line1)
+function normalizeCricketResults(raw) {
+  let items = []
+  if (Array.isArray(raw)) items = raw
+  else if (Array.isArray(raw?.data)) items = raw.data
 
-    const findScore = (teamName, idx) => {
-      const found = scoreArr.filter(s => s?.inning && teamName && s.inning.includes(teamName))
-      return found.length ? found[found.length - 1] : scoreArr[idx]
-    }
-    const s1 = findScore(t1, 0)
-    const s2 = findScore(t2, 1)
+  return items.map(m => {
+    const s = []
+    s.push({ team: toText(m.team_a, 'Team 1'), r: m.team_a_scores || '0', w: m.team_a_wickets, o: m.team_a_over })
+    s.push({ team: toText(m.team_b, 'Team 2'), r: m.team_b_scores || '0', w: m.team_b_wickets, o: m.team_b_over })
 
     return {
-      id:        m.id,
-      name:      toText(m.name, `${t1} vs ${t2}`),
-      teams:     [t1, t2],
-      score:     [
-        { team: t1, r: s1?.r, w: s1?.w, o: s1?.o },
-        { team: t2, r: s2?.r, w: s2?.w, o: s2?.o },
-      ],
-      status:    toText(m.status, 'Finished'),
-      format:    detectFormat(m.matchType || m.name || ''),
-      matchType: toText(m.matchType, ''),
+      id:        m.match_id  || m.id,
+      name:      m.title     || m.name || `${toText(m.team_a, 'Team 1')} vs ${toText(m.team_b, 'Team 2')}`,
+      teams:     [toText(m.team_a, 'Team 1'), toText(m.team_b, 'Team 2')],
+      score:     s,
+      status:    toText(m.match_status || m.toss || m.need_run_ball, 'Finished'),
+      format:    detectFormat(m.match_type || m.title || m.series || ''),
+      matchType: toText(m.series || m.match_type, ''),
       venue:     toText(m.venue),
-      date:      m.dateTimeGMT || m.date || '',
-      isLive:    false,
+      date:      m.match_date || m.date || '',
     }
   })
 }
