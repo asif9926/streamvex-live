@@ -6,6 +6,7 @@
 //   CRICAPI_KEY — cricapi.com থেকে free API key নাও
 
 import { kv } from '@vercel/kv'
+import { isNotableCricket } from './_lib/cricketFilters.js'
 
 const CRICAPI_URL = 'https://api.cricapi.com/v1/series'
 const CACHE_TTL   = 86400   // 24 hours
@@ -19,7 +20,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET')    return res.status(405).json({ error: 'Method not allowed' })
 
-  const cacheKey = 'cricket-series:v2'
+  const cacheKey = 'cricket-series:v3'
 
   try {
     // ── 1. KV Cache (24hr) ────────────────────────────
@@ -33,20 +34,15 @@ export default async function handler(req, res) {
       return res.status(503).json({ error: 'CRICAPI_KEY not configured' })
     }
 
-    // ── 2. CricAPI call — paginate through several pages ──────
-    // ⚠️ [Bug Fix — root cause of "series data doesn't match reality"]
-    // CricAPI's /series endpoint returns thousands of series across every
-    // level of cricket (international, domestic, women's, youth, associate
-    // nations…), NOT in chronological order — roughly by their own internal
-    // database id, ~25 per page. Only ever fetching offset=0 (page 1) meant
-    // the site only ever saw whatever ~25 series happened to land on that
-    // one page, which often excluded every currently-running or near-term
-    // series entirely — exactly the "nothing until 2 months from now" gap
-    // reported. Fetching several pages and merging BEFORE the existing
-    // ongoing→upcoming→ended sort gives that sort real near-term data to
-    // work with. This only runs once per 24hr cache window, so the extra
-    // pages cost is quota-safe (≤4 calls/day for this endpoint).
-    const MAX_PAGES = 4
+    // ⚠️ [Update] MAX_PAGES bumped 4→10 now that api/match-results.js no
+    // longer shares CRICAPI_KEY's quota (reverted to RapidAPI) — this
+    // endpoint now has the headroom to fetch more pages, which matters
+    // because most of what CricAPI returns is domestic/associate-nation
+    // noise that gets filtered out below (isNotableCricket) — need a
+    // bigger raw pool so enough INTERNATIONAL/famous-league series survive
+    // the filter. Still capped, still just once per 24hr cache window
+    // (≤10 calls/day for this endpoint).
+    const MAX_PAGES = 10
     let all      = []
     let pageSize = null
     for (let page = 0; page < MAX_PAGES; page++) {
@@ -68,7 +64,13 @@ export default async function handler(req, res) {
       if (batch.length === 0 || batch.length < pageSize) break   // last page reached
     }
 
-    const data = all.map(s => ({
+    // ⚠️ [Bug Fix] User request — hide domestic first-class/qualifier noise
+    // (Ranji Trophy, random regional tournaments, etc.), keep only real
+    // international series + well-known T20 leagues (IPL/BPL/PSL/BBL/…).
+    // See api/_lib/cricketFilters.js for the exact keyword list.
+    const notable = all.filter(s => isNotableCricket(s.name))
+
+    const data = notable.map(s => ({
       id:         s.id,
       name:       s.name,
       startDate:  s.startDate,

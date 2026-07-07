@@ -6,6 +6,7 @@
 //   CRICAPI_KEY
 
 import { kv } from '@vercel/kv'
+import { isNotableCricket } from './_lib/cricketFilters.js'
 
 const CRICAPI_URL = 'https://api.cricapi.com/v1/matches'
 const CACHE_TTL   = 21600   // 6 hours
@@ -19,7 +20,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET')    return res.status(405).json({ error: 'Method not allowed' })
 
-  const cacheKey = 'cricket-upcoming'
+  const cacheKey = 'cricket-upcoming:v2'
 
   try {
     // ── 1. KV Cache (6hr) ─────────────────────────────
@@ -43,7 +44,12 @@ export default async function handler(req, res) {
     // reality. Merging several pages first gives the date filter/sort a
     // representative set to work with. Runs once per 6hr cache window, so
     // the extra pages are quota-safe (≤4 calls per refresh).
-    const MAX_PAGES = 4
+    // ⚠️ [Update] MAX_PAGES bumped 4→10 — same reasoning as
+    // cricket-series.js: match-results.js no longer shares CRICAPI_KEY's
+    // quota, freeing headroom, and needed because isNotableCricket below
+    // discards most domestic/associate-nation noise, so a bigger raw pool
+    // is needed for enough international/famous-league matches to survive.
+    const MAX_PAGES = 10
     let all      = []
     let pageSize = null
     for (let page = 0; page < MAX_PAGES; page++) {
@@ -74,6 +80,9 @@ export default async function handler(req, res) {
         if (isNaN(startTime)) return false
         return !m.matchStarted && startTime > now
       })
+      // ⚠️ [Bug Fix] User request — only international matches + famous
+      // T20 leagues (IPL/BPL/PSL/BBL/…), hide domestic/qualifier noise.
+      .filter(m => isNotableCricket(m.name, m.series))
       .sort((a, b) => new Date(a.dateTimeGMT) - new Date(b.dateTimeGMT))
       .map(m => ({
         id:        m.id,
