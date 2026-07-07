@@ -28,11 +28,15 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET')    return res.status(405).json({ error: 'Method not allowed' })
 
-  const cacheKey = 'cricket-upcoming:v2'
+  // ✅ [Debug] ?debug=1 — cricket-series.js এর মতোই, cache বাইপাস করে raw
+  // fetch + প্রতিটা filter ধাপের count/sample দেখায়। ব্যবহার:
+  // yoursite.vercel.app/api/cricket-upcoming?debug=1
+  const debugMode = req.query.debug === '1'
+  const cacheKey  = 'cricket-upcoming:v2'
 
   try {
-    // ── 1. KV Cache (6hr) ─────────────────────────────
-    const cached = await kv.get(cacheKey)
+    // ── 1. KV Cache (12hr) ─────────────────────────────
+    const cached = debugMode ? null : await kv.get(cacheKey)
     if (cached) {
       res.setHeader('Cache-Control', EDGE_CACHE)
       return res.status(200).json({ source: 'cache', data: cached._data || cached })
@@ -81,16 +85,33 @@ export default async function handler(req, res) {
 
     // Upcoming only — dateTimeGMT এখনো আসেনি এবং matchStarted = false
     const now  = Date.now()
-    const data = all
-      .filter(m => {
-        // ✅ [Fix] NaN guard — invalid dates should not pass filter
-        const startTime = new Date(m.dateTimeGMT).getTime()
-        if (isNaN(startTime)) return false
-        return !m.matchStarted && startTime > now
+    const byDate = all.filter(m => {
+      // ✅ [Fix] NaN guard — invalid dates should not pass filter
+      const startTime = new Date(m.dateTimeGMT).getTime()
+      if (isNaN(startTime)) return false
+      return !m.matchStarted && startTime > now
+    })
+    // ⚠️ [Bug Fix] User request — only international matches + famous
+    // T20 leagues (IPL/BPL/PSL/BBL/…), hide domestic/qualifier noise.
+    const byName = byDate.filter(m => isNotableCricket(m.name, m.series))
+
+    if (debugMode) {
+      const sample = (arr) => arr.slice(0, 20).map(m => ({
+        name: m.name, series: m.series, dateTimeGMT: m.dateTimeGMT, matchStarted: m.matchStarted,
+      }))
+      return res.status(200).json({
+        debug: true,
+        pagesFetched:    pageSize ? Math.ceil(all.length / pageSize) : 0,
+        totalRawFetched: all.length,
+        afterDateFilter: byDate.length,
+        afterNameFilter: byName.length,
+        sampleRaw:       sample(all),
+        sampleAfterDate: sample(byDate),
+        sampleAfterName: sample(byName),
       })
-      // ⚠️ [Bug Fix] User request — only international matches + famous
-      // T20 leagues (IPL/BPL/PSL/BBL/…), hide domestic/qualifier noise.
-      .filter(m => isNotableCricket(m.name, m.series))
+    }
+
+    const data = byName
       .sort((a, b) => new Date(a.dateTimeGMT) - new Date(b.dateTimeGMT))
       .map(m => ({
         id:        m.id,
