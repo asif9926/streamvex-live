@@ -33,19 +33,41 @@ export default async function handler(req, res) {
       return res.status(503).json({ error: 'CRICAPI_KEY not configured' })
     }
 
-    // ── 2. CricAPI — upcoming matches ────────────────
-    const url = `${CRICAPI_URL}?apikey=${process.env.CRICAPI_KEY}&offset=0`
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(10000),
-    })
-    if (!response.ok) throw new Error(`CricAPI ${response.status}`)
-
-    const raw = await response.json()
-    if (raw.status !== 'success') throw new Error(raw.reason || 'CricAPI error')
+    // ── 2. CricAPI — upcoming matches (paginated) ────
+    // ⚠️ [Bug Fix — same root cause as cricket-series.js] CricAPI's
+    // /matches endpoint returns ALL matches worldwide (finished/live/
+    // upcoming, every level of cricket) in a fixed non-chronological order,
+    // ~25 per page. Only fetching offset=0 meant "Upcoming" was filtered
+    // from whatever arbitrary ~25 matches landed on page 1 — often missing
+    // real near-term matches entirely, which is why the list didn't match
+    // reality. Merging several pages first gives the date filter/sort a
+    // representative set to work with. Runs once per 6hr cache window, so
+    // the extra pages are quota-safe (≤4 calls per refresh).
+    const MAX_PAGES = 4
+    let all      = []
+    let pageSize = null
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const offset = page * (pageSize || 25)
+      const url = `${CRICAPI_URL}?apikey=${process.env.CRICAPI_KEY}&offset=${offset}`
+      const response = await fetch(url, { signal: AbortSignal.timeout(10000) })
+      if (!response.ok) {
+        if (page === 0) throw new Error(`CricAPI ${response.status}`)
+        break
+      }
+      const raw = await response.json()
+      if (raw.status !== 'success') {
+        if (page === 0) throw new Error(raw.reason || 'CricAPI error')
+        break
+      }
+      const batch = raw.data || []
+      if (pageSize === null) pageSize = batch.length || 25
+      all = all.concat(batch)
+      if (batch.length === 0 || batch.length < pageSize) break
+    }
 
     // Upcoming only — dateTimeGMT এখনো আসেনি এবং matchStarted = false
     const now  = Date.now()
-    const data = (raw.data || [])
+    const data = all
       .filter(m => {
         // ✅ [Fix] NaN guard — invalid dates should not pass filter
         const startTime = new Date(m.dateTimeGMT).getTime()

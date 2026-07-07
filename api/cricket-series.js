@@ -33,21 +33,42 @@ export default async function handler(req, res) {
       return res.status(503).json({ error: 'CRICAPI_KEY not configured' })
     }
 
-    // ── 2. CricAPI call ──────────────────────────────
-    const url = `${CRICAPI_URL}?apikey=${process.env.CRICAPI_KEY}&offset=0`
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(10000),
-    })
-
-    if (!response.ok) throw new Error(`CricAPI ${response.status}`)
-
-    const raw  = await response.json()
-
-    if (raw.status !== 'success') {
-      throw new Error(raw.reason || 'CricAPI error')
+    // ── 2. CricAPI call — paginate through several pages ──────
+    // ⚠️ [Bug Fix — root cause of "series data doesn't match reality"]
+    // CricAPI's /series endpoint returns thousands of series across every
+    // level of cricket (international, domestic, women's, youth, associate
+    // nations…), NOT in chronological order — roughly by their own internal
+    // database id, ~25 per page. Only ever fetching offset=0 (page 1) meant
+    // the site only ever saw whatever ~25 series happened to land on that
+    // one page, which often excluded every currently-running or near-term
+    // series entirely — exactly the "nothing until 2 months from now" gap
+    // reported. Fetching several pages and merging BEFORE the existing
+    // ongoing→upcoming→ended sort gives that sort real near-term data to
+    // work with. This only runs once per 24hr cache window, so the extra
+    // pages cost is quota-safe (≤4 calls/day for this endpoint).
+    const MAX_PAGES = 4
+    let all      = []
+    let pageSize = null
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const offset = page * (pageSize || 25)
+      const url = `${CRICAPI_URL}?apikey=${process.env.CRICAPI_KEY}&offset=${offset}`
+      const response = await fetch(url, { signal: AbortSignal.timeout(10000) })
+      if (!response.ok) {
+        if (page === 0) throw new Error(`CricAPI ${response.status}`)
+        break   // later page failed — keep what we already collected
+      }
+      const raw = await response.json()
+      if (raw.status !== 'success') {
+        if (page === 0) throw new Error(raw.reason || 'CricAPI error')
+        break
+      }
+      const batch = raw.data || []
+      if (pageSize === null) pageSize = batch.length || 25
+      all = all.concat(batch)
+      if (batch.length === 0 || batch.length < pageSize) break   // last page reached
     }
 
-    const data = (raw.data || []).map(s => ({
+    const data = all.map(s => ({
       id:         s.id,
       name:       s.name,
       startDate:  s.startDate,
