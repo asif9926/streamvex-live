@@ -55,9 +55,21 @@ export async function fetchSeriesMatches(seriesId, apiKey) {
   const now = Date.now()
 
   const data = matchList.map(m => {
-    const startMs    = m.dateTimeGMT ? new Date(m.dateTimeGMT).getTime() : null
-    const isUpcoming = startMs ? startMs > now : false
-    const isLive     = m.matchStarted && !m.matchEnded
+    const startMs = m.dateTimeGMT ? new Date(m.dateTimeGMT).getTime() : null
+    const ageMs   = startMs !== null ? now - startMs : null
+
+    // ⚠️ [Bug Fix] CricAPI মাঝে মাঝে পুরনো/কম-ট্র্যাক-করা ম্যাচের
+    // (যেমন county-level T20 Blast) `matchEnded` flag কখনো true করে না —
+    // ফলে সেই ম্যাচ চিরকালের জন্য "LIVE" দেখাতে থাকে (যেমন May 29 এর
+    // ম্যাচ জুলাইতেও LIVE দেখাচ্ছিল)। একটা ম্যাচ শুরুর 48 ঘন্টার বেশি
+    // পার হয়ে গেলে, upstream flag যাই বলুক, বাস্তবে সেটা শেষ হয়ে গেছে
+    // ধরে নেওয়াই নিরাপদ — তাই সেক্ষেত্রে জোর করে finished ধরা হচ্ছে।
+    const STALE_LIVE_MS = 48 * 60 * 60 * 1000
+    const isStale        = ageMs !== null && ageMs > STALE_LIVE_MS
+
+    const isUpcoming = startMs !== null ? startMs > now : false
+    const isLive     = m.matchStarted && !m.matchEnded && !isStale
+    const isFinished = m.matchEnded || isStale
 
     return {
       id:         m.id,
@@ -73,7 +85,7 @@ export async function fetchSeriesMatches(seriesId, apiKey) {
       score:      m.score || [],
       isLive,
       isUpcoming,
-      isFinished: m.matchEnded || false,
+      isFinished,
       seriesId,
       seriesName: seriesInfo.name || '',
     }

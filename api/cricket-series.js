@@ -27,7 +27,10 @@ export default async function handler(req, res) {
   // ✅ [Fix] v6 → v7: v6 এর KV cache-এ ভুল date-filter এর কারণে empty []
   // ফলাফল 24hr এর জন্য stuck হয়ে ছিল। version bump না করলে deploy করার
   // পরও পুরনো empty cache-ই serve হতো যতক্ষণ না TTL নিজে থেকে expire হয়।
-  const cacheKey  = 'cricket-series:v7'
+  // ✅ [Fix] v7 → v8: FAMOUS_LEAGUES থেকে T20 Blast/Vitality Blast বাদ
+  // দেওয়া হয়েছে (domestic county league, internationally famous না) —
+  // version bump না করলে পুরনো cache-এ এখনো সেগুলো থেকে যেত 24hr পর্যন্ত।
+  const cacheKey  = 'cricket-series:v8'
 
   try {
     // ── 1. KV Cache (24hr) ────────────────────────────

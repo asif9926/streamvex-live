@@ -36,7 +36,11 @@ const FAMOUS_LEAGUES = [
   'international league t20', 'ilt20',
   'major league cricket', ' mlc',
   'the hundred',
-  't20 blast', 'vitality blast',
+  // ⚠️ [Fix] 'T20 Blast'/'Vitality Blast' সরানো হলো — এটা ইংল্যান্ডের
+  // অভ্যন্তরীণ county T20 league (আন্তর্জাতিকভাবে famous না, IPL/BPL/PSL/BBL
+  // এর মতো না), user request অনুযায়ী বাদ। এই একই keyword "Women's T20
+  // Blast" আর "Women's T20 Blast League Two"-কেও (আরও lower-tier) match
+  // করে ফেলছিল substring match এর কারণে — দুটোই এখন বাদ পড়বে।
   'super smash',
   'world cup', 'asia cup', 'champions trophy',
   't20i tri-series', 'icc ',
