@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET')    return res.status(405).json({ error: 'Method not allowed' })
 
-  const cacheKey = 'cricket-series:v3'
+  const cacheKey = 'cricket-series:v4'
 
   try {
     // ── 1. KV Cache (24hr) ────────────────────────────
@@ -70,7 +70,23 @@ export default async function handler(req, res) {
     // See api/_lib/cricketFilters.js for the exact keyword list.
     const notable = all.filter(s => isNotableCricket(s.name))
 
-    const data = notable.map(s => ({
+    // ⚠️ [Bug Fix] The name filter above only checked WHAT a series is,
+    // never WHEN — so already-finished series (some from over a year ago)
+    // were still passing through and cluttering the list. This is the
+    // "Series" tab (ongoing + upcoming fixtures only); a finished tour is
+    // not "running this month + upcoming months" — completed matches
+    // belong in the separate Results tab (match-results.js). Drop anything
+    // whose endDate has already passed. Missing endDate is kept (can't be
+    // sure it's over) rather than dropped, to avoid losing valid data CricAPI
+    // just didn't tag with an end date.
+    const now = Date.now()
+    const current = notable.filter(s => {
+      if (!s.endDate) return true
+      const end = new Date(s.endDate).getTime()
+      return isNaN(end) || end >= now
+    })
+
+    const data = current.map(s => ({
       id:         s.id,
       name:       s.name,
       startDate:  s.startDate,
@@ -83,32 +99,22 @@ export default async function handler(req, res) {
       matchCount: (s.odi || 0) + (s.t20 || 0) + (s.test || 0),
     }))
 
-    // ✅ [Fix] CricAPI returns series in no particular useful order — ended
-    // and upcoming series were mixed together randomly. Same 3-bucket
-    // pattern used for football fixtures: ongoing series first, then
-    // upcoming (soonest start first), then already-ended series last
-    // (most recently ended first) — so the list reads front-to-back like
-    // a calendar instead of the results feed it looked like before.
-    const now = Date.now()
+    // ✅ [Fix] CricAPI returns series in no particular useful order.
+    // Now that ended series are filtered out above, only 2 buckets remain:
+    // ongoing first, then upcoming (soonest start first) — reads
+    // front-to-back like a calendar.
     data.sort((a, b) => {
       const rank = (s) => {
         const start = s.startDate ? new Date(s.startDate).getTime() : null
         const end   = s.endDate   ? new Date(s.endDate).getTime()   : null
         if (start !== null && end !== null && start <= now && now <= end) return 0  // ongoing
-        if (start !== null && start > now) return 1                                  // upcoming
-        return 2                                                                     // ended
+        return 1   // upcoming (or edge case with missing dates)
       }
       const ra = rank(a), rb = rank(b)
       if (ra !== rb) return ra - rb
-      const da = a.startDate ? new Date(a.startDate) - 0 : 0
-      const db = b.startDate ? new Date(b.startDate) - 0 : 0
-      if (ra === 2) {
-        // ended — most recently ended first
-        const ea = a.endDate ? new Date(a.endDate).getTime() : 0
-        const eb = b.endDate ? new Date(b.endDate).getTime() : 0
-        return eb - ea
-      }
-      return da - db   // ongoing/upcoming — soonest start first
+      const da = a.startDate ? new Date(a.startDate).getTime() : 0
+      const db = b.startDate ? new Date(b.startDate).getTime() : 0
+      return da - db   // soonest start first
     })
 
     // ── 3. KV save (24hr) ────────────────────────────
