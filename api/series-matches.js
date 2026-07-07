@@ -13,14 +13,13 @@
 import { kv } from '@vercel/kv'
 
 const CRICAPI_SERIES_INFO = 'https://api.cricapi.com/v1/series_info'
-// ⚠️ [Fix] 10 min ছিল আগে। CRICAPI_KEY এর 100 req/day limit এই একই key
-// দিয়ে cricket-series.js + cricket-upcoming.js এর সাথেও শেয়ার হয়, এবং এখানে
-// প্রতিটা আলাদা seriesId এর জন্য আলাদা cache entry — একসাথে একাধিক সিরিজ
-// popular থাকলে 10 min TTL এ দিনে সহজেই 100+ call হয়ে যায়। 30 min এ
-// বাড়িয়ে quota-safe রাখা হলো (স্কোর নিজেই live-score.js থেকে আসে,
-// এই endpoint শুধু ম্যাচ লিস্ট/সিডিউল দেখায়, তাই 30 min delay সমস্যা না)।
-const CACHE_TTL           = 1800   // 30 minutes
-const EDGE_CACHE          = 's-maxage=1800, stale-while-revalidate=3600'
+// ⚠️ [Fix] 10 min ছিল আগে, তারপর 30 min করা হয়েছিল। এখন 30 min → 1hr —
+// cricket-upcoming.js এর refresh frequency কমানোর পরও (6hr→12hr), এই
+// endpoint টাই একমাত্র on-demand (user traffic-নির্ভর) consumer, তাই এখানে
+// আরেকটু margin রাখা হলো। একাধিক ভিন্ন series ঘন ঘন expand হলেও প্রতি
+// series এ দিনে ২৪টার বেশি call হবে না (আগে ছিল ৪৮টা পর্যন্ত সম্ভব)।
+const CACHE_TTL           = 3600   // 1 hour
+const EDGE_CACHE          = 's-maxage=3600, stale-while-revalidate=7200'
 
 export default async function handler(req, res) {
   // ── CORS ─────────────────────────────────────────────

@@ -9,8 +9,16 @@ import { kv } from '@vercel/kv'
 import { isNotableCricket } from './_lib/cricketFilters.js'
 
 const CRICAPI_URL = 'https://api.cricapi.com/v1/matches'
-const CACHE_TTL   = 21600   // 6 hours
-const EDGE_CACHE  = 's-maxage=21600, stale-while-revalidate=43200'  // ✅ [Update #1]
+// ⚠️ [Fix] 6hr → 12hr. CRICAPI_KEY এর 100 req/day limit এই একই key
+// cricket-series.js (worst-case ~30/day) আর series-matches.js (on-demand,
+// প্রতি expand এ) এর সাথেও শেয়ার হয়। এই endpoint 6hr TTL এ দিনে 4 বার
+// refresh হতো, প্রতিবার worst-case 10 page = 40/day — খালি এটাই বাজেটের
+// প্রায় অর্ধেক খেয়ে ফেলত, series-matches.js এর on-demand call এর জন্য
+// সামান্য headroom থাকত। Upcoming ফিক্সচারের schedule ঘন্টায় ঘন্টায়
+// বদলায় না (score আসে live-score.js থেকে, এটা শুধু schedule দেখায়) —
+// 12hr এ কমালে ঝুঁকি ছাড়াই দিনে 2 refresh (worst-case ~20 call) এ নেমে আসে।
+const CACHE_TTL   = 43200   // 12 hours
+const EDGE_CACHE  = 's-maxage=43200, stale-while-revalidate=86400'  // ✅ [Update #1]
 
 export default async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://streamvex-live.vercel.app'
