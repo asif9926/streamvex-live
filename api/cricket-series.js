@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET')    return res.status(405).json({ error: 'Method not allowed' })
 
-  const cacheKey = 'cricket-series:v4'
+  const cacheKey = 'cricket-series:v5'
 
   try {
     // ── 1. KV Cache (24hr) ────────────────────────────
@@ -34,15 +34,13 @@ export default async function handler(req, res) {
       return res.status(503).json({ error: 'CRICAPI_KEY not configured' })
     }
 
-    // ⚠️ [Update] MAX_PAGES bumped 4→10 now that api/match-results.js no
-    // longer shares CRICAPI_KEY's quota (reverted to RapidAPI) — this
-    // endpoint now has the headroom to fetch more pages, which matters
-    // because most of what CricAPI returns is domestic/associate-nation
-    // noise that gets filtered out below (isNotableCricket) — need a
-    // bigger raw pool so enough INTERNATIONAL/famous-league series survive
-    // the filter. Still capped, still just once per 24hr cache window
-    // (≤10 calls/day for this endpoint).
-    const MAX_PAGES = 10
+    // ⚠️ [Update] MAX_PAGES bumped 10→20. This endpoint only refreshes
+    // ONCE per 24hr cache window, so extra pages here are cheap
+    // (≤20 calls/day total — NOT ×4 like cricket-upcoming.js, which
+    // refreshes every 6hrs). CricAPI's list order is not chronological,
+    // so a bigger sample meaningfully improves how many
+    // international/famous-league series we actually find.
+    const MAX_PAGES = 20
     let all      = []
     let pageSize = null
     for (let page = 0; page < MAX_PAGES; page++) {
@@ -64,29 +62,38 @@ export default async function handler(req, res) {
       if (batch.length === 0 || batch.length < pageSize) break   // last page reached
     }
 
-    // ⚠️ [Bug Fix] User request — hide domestic first-class/qualifier noise
-    // (Ranji Trophy, random regional tournaments, etc.), keep only real
-    // international series + well-known T20 leagues (IPL/BPL/PSL/BBL/…).
+    // Hide domestic first-class/qualifier noise (Ranji Trophy, random
+    // regional tournaments, etc.), keep only international series +
+    // well-known T20 leagues (IPL/BPL/PSL/BBL/…).
     // See api/_lib/cricketFilters.js for the exact keyword list.
     const notable = all.filter(s => isNotableCricket(s.name))
 
-    // ⚠️ [Bug Fix] The name filter above only checked WHAT a series is,
-    // never WHEN — so already-finished series (some from over a year ago)
-    // were still passing through and cluttering the list. This is the
-    // "Series" tab (ongoing + upcoming fixtures only); a finished tour is
-    // not "running this month + upcoming months" — completed matches
-    // belong in the separate Results tab (match-results.js). Drop anything
-    // whose endDate has already passed. Missing endDate is kept (can't be
-    // sure it's over) rather than dropped, to avoid losing valid data CricAPI
-    // just didn't tag with an end date.
     const now = Date.now()
-    const current = notable.filter(s => {
-      if (!s.endDate) return true
+    const isEnded = (s) => {
+      if (!s.endDate) return false   // no end date info — treat as not-ended
       const end = new Date(s.endDate).getTime()
-      return isNaN(end) || end >= now
-    })
+      return !isNaN(end) && end < now
+    }
 
-    const data = current.map(s => ({
+    // ⚠️ [Bug Fix — was showing "No series data found"] A strict
+    // "notable AND not-yet-ended" filter is the IDEAL result, but CricAPI's
+    // list order is arbitrary — with a capped page sample, sometimes every
+    // notable series that happens to be in THIS sample is already over,
+    // and a strict filter then shows nothing at all, which is worse than
+    // showing slightly-stale data. Tiered fallback: use the strict/ideal
+    // result if it has enough entries; otherwise progressively relax
+    // instead of ever showing an empty page.
+    const strict = notable.filter(s => !isEnded(s))
+    let chosen
+    if (strict.length >= 5) {
+      chosen = strict                              // Tier 1: ideal — plenty of live/upcoming notable series
+    } else if (notable.length > 0) {
+      chosen = notable                             // Tier 2: relax the date cutoff, keep the name filter
+    } else {
+      chosen = all                                 // Tier 3: last resort — should be unreachable with 20 pages,
+    }                                               //          but never show a blank page if it somehow is
+
+    const data = chosen.map(s => ({
       id:         s.id,
       name:       s.name,
       startDate:  s.startDate,
@@ -99,19 +106,25 @@ export default async function handler(req, res) {
       matchCount: (s.odi || 0) + (s.t20 || 0) + (s.test || 0),
     }))
 
-    // ✅ [Fix] CricAPI returns series in no particular useful order.
-    // Now that ended series are filtered out above, only 2 buckets remain:
-    // ongoing first, then upcoming (soonest start first) — reads
-    // front-to-back like a calendar.
+    // Sort: ongoing first, then upcoming (soonest first), ended ones
+    // (only present in the Tier 2/3 fallback) pushed to the very bottom,
+    // most-recently-ended first — so it always reads front-to-back like
+    // a calendar, whichever tier was used.
     data.sort((a, b) => {
       const rank = (s) => {
         const start = s.startDate ? new Date(s.startDate).getTime() : null
         const end   = s.endDate   ? new Date(s.endDate).getTime()   : null
         if (start !== null && end !== null && start <= now && now <= end) return 0  // ongoing
-        return 1   // upcoming (or edge case with missing dates)
+        if (end !== null && end < now) return 2                                     // ended
+        return 1                                                                    // upcoming
       }
       const ra = rank(a), rb = rank(b)
       if (ra !== rb) return ra - rb
+      if (ra === 2) {
+        const ea = a.endDate ? new Date(a.endDate).getTime() : 0
+        const eb = b.endDate ? new Date(b.endDate).getTime() : 0
+        return eb - ea   // most recently ended first
+      }
       const da = a.startDate ? new Date(a.startDate).getTime() : 0
       const db = b.startDate ? new Date(b.startDate).getTime() : 0
       return da - db   // soonest start first
