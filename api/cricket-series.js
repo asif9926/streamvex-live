@@ -30,7 +30,9 @@ export default async function handler(req, res) {
   // ✅ [Fix] v7 → v8: FAMOUS_LEAGUES থেকে T20 Blast/Vitality Blast বাদ
   // দেওয়া হয়েছে (domestic county league, internationally famous না) —
   // version bump না করলে পুরনো cache-এ এখনো সেগুলো থেকে যেত 24hr পর্যন্ত।
-  const cacheKey  = 'cricket-series:v8'
+  // ✅ [Fix] v8 → v9: qualifier/sub-regional tournament (associate-level,
+  // low profile) এখন বাদ, world cup/icc keyword match করলেও
+  const cacheKey  = 'cricket-series:v9'
 
   try {
     // ── 1. KV Cache (24hr) ────────────────────────────

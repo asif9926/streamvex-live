@@ -46,6 +46,17 @@ const FAMOUS_LEAGUES = [
   't20i tri-series', 'icc ',
 ]
 
+// ⚠️ [Fix] এই তালিকার যেকোনোটা নামে থাকলে সাথে সাথে বাদ — even if it
+// also matches a FAMOUS_LEAGUES keyword (e.g. "ICC Men's T20 World Cup
+// Americas Sub Regional Qualifier B, 2026" নামে "world cup"/"icc " থাকা
+// সত্ত্বেও এটা আসলে associate-nation level নিচু-প্রোফাইল qualifier ম্যাচ,
+// আসল World Cup না)। আসল World Cup/Asia Cup/Champions Trophy এর নামে
+// এসব শব্দ কখনো থাকে না, তাই legit ইভেন্ট বাদ পড়ার ঝুঁকি নেই।
+const EXCLUDE_KEYWORDS = [
+  'qualifier', 'sub regional', 'regional qualifier',
+  'challenge league', 'division two', 'division three', 'div 2', 'div 3',
+]
+
 /**
  * isNotableCricket — true হলে এই সিরিজ/ম্যাচ দেখানো হবে
  *
@@ -54,6 +65,9 @@ const FAMOUS_LEAGUES = [
  */
 export function isNotableCricket(name = '', extra = '') {
   const n = `${name} ${extra}`.toLowerCase()
+
+  // 0) নিচু-প্রোফাইল qualifier/regional — সবার আগে বাদ
+  if (EXCLUDE_KEYWORDS.some(keyword => n.includes(keyword))) return false
 
   // 1) পরিচিত লিগ?
   if (FAMOUS_LEAGUES.some(keyword => n.includes(keyword))) return true

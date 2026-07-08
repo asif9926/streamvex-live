@@ -26,7 +26,7 @@ import { kv } from '@vercel/kv'
 import { resolveSeriesDates } from './_lib/cricketFilters.js'
 import { fetchSeriesMatches } from './_lib/cricapi.js'
 
-const SERIES_CACHE_KEY          = 'cricket-series:v8'   // cricket-series.js এর cache — এখানে re-fetch করা হয় না, শুধু পড়া হয়
+const SERIES_CACHE_KEY          = 'cricket-series:v9'   // cricket-series.js এর cache — এখানে re-fetch করা হয় না, শুধু পড়া হয়
 const SERIES_MATCH_CACHE_PREFIX = 'series-matches:v2:'  // series-matches.js এর সাথে SHARED prefix
 const SERIES_MATCH_TTL          = 3600                  // series-matches.js এর TTL এর সাথে সমান রাখা হলো
 
@@ -53,9 +53,8 @@ export default async function handler(req, res) {
   // aggregation এর প্রতিটা ধাপ দেখায়। ব্যবহার:
   // yoursite.vercel.app/api/cricket-upcoming?debug=1
   const debugMode = req.query.debug === '1'
-  // ✅ v3 → v4: SERIES_CACHE_KEY v7→v8 (famous-league filter বদলেছে),
-  // আর isLive stale-match fix — পুরনো cache নতুন logic কে shadow যাতে না করে
-  const cacheKey  = 'cricket-upcoming:v4'
+  // ✅ v4 → v5: SERIES_CACHE_KEY v8→v9 (qualifier-exclusion filter বদলেছে)
+  const cacheKey  = 'cricket-upcoming:v5'
 
   try {
     // ── 1. KV Cache (12hr) ─────────────────────────────
